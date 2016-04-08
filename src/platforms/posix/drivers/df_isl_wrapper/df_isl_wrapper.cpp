@@ -32,10 +32,10 @@
  ****************************************************************************/
 
 /**
- * @file df_bmp280_wrapper.cpp
- * Lightweight driver to access the BMP280 of the DriverFramework.
+ * @file df_isl_wrapper.cpp
+ * Driver to access the ISL of the DriverFramework.
  *
- * @author Julian Oes <julian@oes.ch>
+ * @author Nicolas de Palezieux <ndepal@gmail.com>
  */
 
 #include <px4_config.h>
@@ -50,29 +50,33 @@
 #include <unistd.h>
 #include <px4_getopt.h>
 #include <errno.h>
+#include <string>
 
 #include <systemlib/perf_counter.h>
 #include <systemlib/err.h>
 
-#include <drivers/drv_baro.h>
+#include <drivers/drv_range_finder.h>
+
+#include <uORB/uORB.h>
+#include <uORB/topics/subsystem_info.h>
+#include <uORB/topics/distance_sensor.h>
 
 #include <board_config.h>
-//#include <mathlib/math/filter/LowPassFilter2p.hpp>
 
-#include <bmp280/BMP280.hpp>
+#include <isl29501/isl29501.hpp>
 #include <DevMgr.hpp>
 
 
-extern "C" { __EXPORT int df_bmp280_wrapper_main(int argc, char *argv[]); }
+extern "C" { __EXPORT int df_isl_wrapper_main(int argc, char *argv[]); }
 
 using namespace DriverFramework;
 
 
-class DfBmp280Wrapper : public BMP280
+class DfISLWrapper : public ISL
 {
 public:
-	DfBmp280Wrapper();
-	~DfBmp280Wrapper();
+	DfISLWrapper();
+	~DfISLWrapper();
 
 
 	/**
@@ -90,160 +94,134 @@ public:
 	int		stop();
 
 private:
-	int _publish(struct baro_sensor_data &data);
+	int _publish(struct range_sensor_data &data);
 
-	orb_advert_t		_baro_topic;
+	orb_advert_t		_range_topic;
 
-	int			_baro_orb_class_instance;
+	int			_orb_class_instance;
 
-	perf_counter_t		_baro_sample_perf;
+	// perf_counter_t		_range_sample_perf;
 
 };
 
-DfBmp280Wrapper::DfBmp280Wrapper() :
-	BMP280(BARO_DEVICE_PATH),
-	_baro_topic(nullptr),
-	_baro_orb_class_instance(-1),
-	_baro_sample_perf(perf_alloc(PC_ELAPSED, "df_baro_read"))
+DfISLWrapper::DfISLWrapper(/*enum Rotation rotation*/) :
+	ISL(ISL_DEVICE_PATH),
+	_range_topic(nullptr),
+	_orb_class_instance(-1)
 {
 }
 
-DfBmp280Wrapper::~DfBmp280Wrapper()
+DfISLWrapper::~DfISLWrapper()
 {
-	perf_free(_baro_sample_perf);
 }
 
-int DfBmp280Wrapper::start()
+int DfISLWrapper::start()
 {
-	// TODO: don't publish garbage here
-	baro_report baro_report = {};
-	_baro_topic = orb_advertise_multi(ORB_ID(sensor_baro), &baro_report,
-					  &_baro_orb_class_instance, ORB_PRIO_DEFAULT);
 
-	if (_baro_topic == nullptr) {
-		PX4_ERR("sensor_baro advert fail");
-		return -1;
-	}
+	struct distance_sensor_s d;
+	_range_topic = orb_advertise_multi(ORB_ID(distance_sensor), &d,
+					   &_orb_class_instance, ORB_PRIO_DEFAULT);
 
-	/* Init device and start sensor. */
-	int ret = init();
+	int ret;
+	ret = ISL::init();
 
 	if (ret != 0) {
-		PX4_ERR("BMP280 init fail: %d", ret);
+		PX4_ERR("ISL init fail: %d", ret);
 		return ret;
 	}
 
-	ret = BMP280::start();
+	ret = ISL::start();
 
 	if (ret != 0) {
-		PX4_ERR("BMP280 start fail: %d", ret);
+		PX4_ERR("ISL start fail: %d", ret);
 		return ret;
 	}
 
 	return 0;
 }
 
-int DfBmp280Wrapper::stop()
+int DfISLWrapper::stop()
 {
 	/* Stop sensor. */
-	int ret = BMP280::stop();
+	int ret = ISL::stop();
 
 	if (ret != 0) {
-		PX4_ERR("BMP280 stop fail: %d", ret);
+		PX4_ERR("ISL stop fail: %d", ret);
 		return ret;
 	}
 
 	return 0;
 }
 
-int DfBmp280Wrapper::_publish(struct baro_sensor_data &data)
+int DfISLWrapper::_publish(struct range_sensor_data &data)
 {
-	perf_begin(_baro_sample_perf);
-
-	baro_report baro_report = {};
-	baro_report.timestamp = hrt_absolute_time();
-
-	baro_report.pressure = data.pressure_pa;
-	baro_report.temperature = data.temperature_c;
-
-	// TODO: verify this, it's just copied from the MS5611 driver.
-
-	// Constant for now
-	const float MSL_PRESSURE = 101325.0f;
-
-	/* tropospheric properties (0-11km) for standard atmosphere */
-	const double T1 = 15.0 + 273.15;	/* temperature at base height in Kelvin */
-	const double a  = -6.5 / 1000;	/* temperature gradient in degrees per metre */
-	const double g  = 9.80665;	/* gravity constant in m/s/s */
-	const double R  = 287.05;	/* ideal gas constant in J/kg/K */
-
-	/* current pressure at MSL in kPa */
-	double p1 = MSL_PRESSURE / 1000.0;
-
-	/* measured pressure in kPa */
-	double p = data.pressure_pa / 1000.0;
-
-	/*
-	 * Solve:
-	 *
-	 *     /        -(aR / g)     \
-	 *    | (p / p1)          . T1 | - T1
-	 *     \                      /
-	 * h = -------------------------------  + h1
-	 *                   a
-	 */
-	baro_report.altitude = (((pow((p / p1), (-(a * R) / g))) * T1) - T1) / a;
-
-	// TODO: when is this ever blocked?
-	if (!(m_pub_blocked)) {
-
-		if (_baro_topic != nullptr) {
-			orb_publish(ORB_ID(sensor_baro), _baro_topic, &baro_report);
-		}
+	if (!_range_topic) {
+		return 1;
 	}
+
+	struct distance_sensor_s d;
+
+	memset(&d, 0, sizeof(d));
+
+	d.timestamp = hrt_absolute_time();
+
+	d.min_distance = float(ISL_MIN_DISTANCE); /* m */
+
+	d.max_distance = float(ISL_MAX_DISTANCE); /* m */
+
+	d.current_distance = float(data.dist);
+
+	d.type = distance_sensor_s::MAV_DISTANCE_SENSOR_LASER;
+
+	d.id = 0; // TODO set proper ID
+
+	d.covariance = 0.0f;
+
+	orb_publish(ORB_ID(distance_sensor), _range_topic, &d);
 
 	/* Notify anyone waiting for data. */
 	DevMgr::updateNotify(*this);
 
-	perf_end(_baro_sample_perf);
-
 	return 0;
 };
 
 
-namespace df_bmp280_wrapper
+namespace df_isl_wrapper
 {
 
-DfBmp280Wrapper *g_dev = nullptr;
+DfISLWrapper *g_dev = nullptr;
 
-int start(/* enum Rotation rotation */);
+int start();
 int stop();
 int info();
+int probe();
+int calibration();
 void usage();
 
-int start(/*enum Rotation rotation*/)
+int start()
 {
-	g_dev = new DfBmp280Wrapper(/*rotation*/);
+	PX4_ERR("start");
+	g_dev = new DfISLWrapper();
 
 	if (g_dev == nullptr) {
-		PX4_ERR("failed instantiating DfBmp280Wrapper object");
+		PX4_ERR("failed instantiating DfISLWrapper object");
 		return -1;
 	}
 
 	int ret = g_dev->start();
 
 	if (ret != 0) {
-		PX4_ERR("DfBmp280Wrapper start failed");
+		PX4_ERR("DfISLWrapper start failed");
 		return ret;
 	}
 
-	// Open the IMU sensor
+	// Open the range sensor
 	DevHandle h;
-	DevMgr::getHandle(BARO_DEVICE_PATH, h);
+	DevMgr::getHandle(ISL_DEVICE_PATH, h);
 
 	if (!h.isValid()) {
 		DF_LOG_INFO("Error: unable to obtain a valid handle for the receiver at: %s (%d)",
-			    BARO_DEVICE_PATH, h.getError());
+			    ISL_DEVICE_PATH, h.getError());
 		return -1;
 	}
 
@@ -287,23 +265,94 @@ info()
 	return 0;
 }
 
+/**
+ * Who am i
+ */
+int
+probe()
+{
+	int ret;
+
+	if (g_dev == nullptr) {
+		ret = start();
+
+		if (ret) {
+			PX4_ERR("Failed to start");
+			return ret;
+		}
+	}
+
+	ret = g_dev->probe();
+
+	if (ret) {
+		PX4_ERR("Failed to probe");
+		return ret;
+	}
+
+	PX4_DEBUG("state @ %p", g_dev);
+
+	return 0;
+}
+
+/**
+ * Calibration
+ */
+int
+calibration()
+{
+	int ret;
+
+	if (g_dev == nullptr) {
+		ret = start();
+
+		if (ret) {
+			PX4_ERR("Failed to start");
+			return ret;
+		}
+	}
+
+	ret = g_dev->calibration();
+
+	if (ret) {
+		PX4_ERR("Failed to probe");
+		return ret;
+	}
+
+	PX4_DEBUG("state @ %p", g_dev);
+
+	return 0;
+}
+
+
 void
 usage()
 {
-	PX4_WARN("Usage: df_bmp280_wrapper 'start', 'info', 'stop'");
+	PX4_WARN("Usage: df_isl_wrapper 'start', 'info', 'stop'");
 }
 
-} // namespace df_bmp280_wrapper
+} // namespace df_isl_wrapper
 
 
 int
-df_bmp280_wrapper_main(int argc, char *argv[])
+df_isl_wrapper_main(int argc, char *argv[])
 {
+	int ch;
 	int ret = 0;
 	int myoptind = 1;
+	const char *myoptarg = NULL;
+
+	/* jump over start/off/etc and look at options first */
+	while ((ch = px4_getopt(argc, argv, "R:", &myoptind, &myoptarg)) != EOF) {
+		switch (ch) {
+
+		default:
+			df_isl_wrapper::usage();
+			return 0;
+		}
+	}
 
 	if (argc <= 1) {
-		df_bmp280_wrapper::usage();
+		df_isl_wrapper::usage();
 		return 1;
 	}
 
@@ -311,19 +360,28 @@ df_bmp280_wrapper_main(int argc, char *argv[])
 
 
 	if (!strcmp(verb, "start")) {
-		ret = df_bmp280_wrapper::start();
+		ret = df_isl_wrapper::start(/*rotation*/);
 	}
 
 	else if (!strcmp(verb, "stop")) {
-		ret = df_bmp280_wrapper::stop();
+		ret = df_isl_wrapper::stop();
 	}
 
 	else if (!strcmp(verb, "info")) {
-		ret = df_bmp280_wrapper::info();
+		ret = df_isl_wrapper::info();
+	}
+
+	else if (!strcmp(verb, "probe")) {
+		ret = df_isl_wrapper::probe();
+	}
+
+	else if (!strcmp(verb, "calib")) {
+		df_isl_wrapper::calibration();
+		return 1;
 	}
 
 	else {
-		df_bmp280_wrapper::usage();
+		df_isl_wrapper::usage();
 		return 1;
 	}
 

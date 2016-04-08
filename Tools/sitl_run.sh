@@ -14,6 +14,10 @@ echo program: $program
 echo model: $model
 echo build_path: $build_path
 
+mkdir -p $build_path/src/firmware/posix/rootfs/fs/microsd
+mkdir -p $build_path/src/firmware/posix/rootfs/eeprom
+touch $build_path/src/firmware/posix/rootfs/eeprom/parameters
+
 if [ "$chroot" == "1" ]
 then
 	chroot_enabled=-c
@@ -86,12 +90,15 @@ elif [ "$program" == "replay" ] && [ "$no_sim" == "" ]
 then
 	echo "Replaying logfile: $logfile"
 	# This is not a simulator, but a log file to replay
+
+	# Check if we need to creat a param file to allow user to change parameters
+	if ! [ -f "${build_path}/src/firmware/posix/rootfs/replay_params.txt" ]
+		then
+		touch ${build_path}/src/firmware/posix/rootfs/replay_params.txt
+	fi
 fi
 
 cd $build_path/src/firmware/posix
-mkdir -p rootfs/fs/microsd
-mkdir -p rootfs/eeprom
-touch rootfs/eeprom/parameters
 
 if [ "$logfile" != "" ]
 then

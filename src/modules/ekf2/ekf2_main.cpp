@@ -170,7 +170,8 @@ private:
 	control::BlockParamFloat *_gyro_bias_p_noise;
 	control::BlockParamFloat *_accel_bias_p_noise;
 	control::BlockParamFloat *_gyro_scale_p_noise;
-	control::BlockParamFloat *_mag_p_noise;
+	control::BlockParamFloat *_mage_p_noise;
+	control::BlockParamFloat *_magb_p_noise;
 	control::BlockParamFloat *_wind_vel_p_noise;
 	control::BlockParamFloat *_terrain_p_noise;	// terrain offset state random walk (m/s)
 	control::BlockParamFloat *_terrain_gradient;	// magnitude of terrain gradient (m/m)
@@ -251,7 +252,8 @@ Ekf2::Ekf2():
 	_gyro_bias_p_noise(new control::BlockParamFloat(this, "EKF2_GYR_B_NOISE", false, &_params->gyro_bias_p_noise)),
 	_accel_bias_p_noise(new control::BlockParamFloat(this, "EKF2_ACC_B_NOISE", false, &_params->accel_bias_p_noise)),
 	_gyro_scale_p_noise(new control::BlockParamFloat(this, "EKF2_GYR_S_NOISE", false, &_params->gyro_scale_p_noise)),
-	_mag_p_noise(new control::BlockParamFloat(this, "EKF2_MAG_B_NOISE", false, &_params->mag_p_noise)),
+	_mage_p_noise(new control::BlockParamFloat(this, "EKF2_MAG_E_NOISE", false, &_params->mage_p_noise)),
+	_magb_p_noise(new control::BlockParamFloat(this, "EKF2_MAG_B_NOISE", false, &_params->magb_p_noise)),
 	_wind_vel_p_noise(new control::BlockParamFloat(this, "EKF2_WIND_NOISE", false, &_params->wind_vel_p_noise)),
 	_terrain_p_noise(new control::BlockParamFloat(this, "EKF2_TERR_NOISE", false, &_params->terrain_p_noise)),
 	_terrain_gradient(new control::BlockParamFloat(this, "EKF2_TERR_GRAD", false, &_params->terrain_gradient)),
@@ -393,18 +395,8 @@ void Ekf2::task_main()
 			orb_copy(ORB_ID(distance_sensor), _range_finder_sub, &range_finder);
 		}
 
-		// in replay mode we are getting the actual timestamp from the sensor topic
-		hrt_abstime now = 0;
-
-		if (_replay_mode) {
-			now = sensors.timestamp;
-
-		} else {
-			now = hrt_absolute_time();
-		}
-
 		// push imu data into estimator
-		_ekf->setIMUData(now, sensors.gyro_integral_dt[0], sensors.accelerometer_integral_dt[0],
+		_ekf->setIMUData(sensors.gyro_timestamp[0], sensors.gyro_integral_dt[0], sensors.accelerometer_integral_dt[0],
 				 &sensors.gyro_integral_rad[0], &sensors.accelerometer_integral_m_s[0]);
 
 		// read mag data
@@ -479,7 +471,7 @@ void Ekf2::task_main()
 
 			// generate control state data
 			control_state_s ctrl_state = {};
-			ctrl_state.timestamp = hrt_absolute_time();
+			ctrl_state.timestamp = sensors.gyro_timestamp[0];
 			ctrl_state.roll_rate = _lp_roll_rate.apply(sensors.gyro_rad_s[0]);
 			ctrl_state.pitch_rate = _lp_pitch_rate.apply(sensors.gyro_rad_s[1]);
 			ctrl_state.yaw_rate = _lp_yaw_rate.apply(sensors.gyro_rad_s[2]);
@@ -509,7 +501,7 @@ void Ekf2::task_main()
 
 
 			// generate remaining vehicle attitude data
-			att.timestamp = hrt_absolute_time();
+			att.timestamp = sensors.gyro_timestamp[0];
 			matrix::Euler<float> euler(q);
 			att.roll = euler(0);
 			att.pitch = euler(1);
@@ -538,7 +530,7 @@ void Ekf2::task_main()
 			float pos[3] = {};
 			float vel[3] = {};
 
-			lpos.timestamp = hrt_absolute_time();
+			lpos.timestamp = sensors.gyro_timestamp[0];
 
 			// Position in local NED frame
 			_ekf->copy_position(pos);
@@ -574,7 +566,7 @@ void Ekf2::task_main()
 			lpos.dist_bottom_valid = _ekf->get_terrain_vert_pos(&terrain_vpos);
 			lpos.dist_bottom = terrain_vpos - pos[2]; // Distance to bottom surface (ground) in meters
 			lpos.dist_bottom_rate = -vel[2]; // Distance to bottom surface (ground) change rate
-			lpos.surface_bottom_timestamp	= hrt_absolute_time(); // Time when new bottom surface found
+			lpos.surface_bottom_timestamp	= sensors.gyro_timestamp[0]; // Time when new bottom surface found
 
 			// TODO: uORB definition does not define what these variables are. We have assumed them to be horizontal and vertical 1-std dev accuracy in metres
 			Vector3f pos_var, vel_var;
@@ -595,7 +587,7 @@ void Ekf2::task_main()
 			struct vehicle_global_position_s global_pos = {};
 
 			if (_ekf->global_position_is_valid()) {
-				global_pos.timestamp = hrt_absolute_time(); // Time of this estimate, in microseconds since system start
+				global_pos.timestamp = sensors.gyro_timestamp[0]; // Time of this estimate, in microseconds since system start
 				global_pos.time_utc_usec = gps.time_utc_usec; // GPS UTC timestamp in microseconds
 
 				double est_lat, est_lon;
@@ -694,7 +686,7 @@ void Ekf2::task_main()
 
 		if (publish_replay_message) {
 			struct ekf2_replay_s replay = {};
-			replay.time_ref = now;
+			replay.time_ref = sensors.gyro_timestamp[0];
 			replay.gyro_integral_dt = sensors.gyro_integral_dt[0];
 			replay.accelerometer_integral_dt = sensors.accelerometer_integral_dt[0];
 			replay.magnetometer_timestamp = sensors.magnetometer_timestamp[0];
