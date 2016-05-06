@@ -60,9 +60,14 @@ public:
 
 	void task_main();
 private:
+	void _check_topics();
+	void _check_battery_status();
 
 	bool _task_is_running;
 	bool _task_should_exit;
+	static constexpr unsigned _approx_interval_us = 100000;
+
+	int _battery_status_sub;
 
 	MiniCommanderFsm _fsm;
 };

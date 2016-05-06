@@ -44,6 +44,7 @@
 MiniCommander::MiniCommander() :
 	_task_is_running(false),
 	_task_should_exit(false),
+	_battery_status_sub(-1),
 	_fsm()
 {}
 
@@ -56,9 +57,8 @@ MiniCommander::task_main()
 	_task_is_running = true;
 	while (!_task_should_exit) {
 
-		// TODO: do something meaningful
-		PX4_INFO("mini commander running");
-		usleep(1000000);
+		_check_topics();
+		usleep(_approx_interval_us);
 	}
 	_task_is_running = false;
 }
@@ -67,4 +67,32 @@ void
 MiniCommander::print_status()
 {
 	// TODO: say something
+}
+
+void
+MiniCommander::_check_topics()
+{
+	_check_battery_status();
+}
+
+void
+MiniCommander::_check_battery_status()
+{
+	if (_battery_status_sub == -1) {
+		_battery_status_sub = orb_subscribe(ORB_ID(battery_status));
+	}
+
+	bool updated;
+	orb_check(_battery_status_sub, &updated);
+
+	if (updated) {
+		battery_status_s battery_status;
+		orb_copy(ORB_ID(battery_status), _battery_status_sub, &battery_status);
+
+		if (battery_status.warning == battery_status_s::BATTERY_WARNING_LOW) {
+			// TODO: maybe do something
+		} else if (battery_status.warning == battery_status_s::BATTERY_WARNING_CRITICAL) {
+			// TODO: maybe do something
+		}
+	}
 }
