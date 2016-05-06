@@ -44,6 +44,8 @@
 #include <uORB/uORB.h>
 #include <uORB/topics/battery_status.h>
 
+#include "mini_commander_fsm.h"
+
 
 class MiniCommander
 {
@@ -62,4 +64,5 @@ private:
 	bool _task_is_running;
 	bool _task_should_exit;
 
+	MiniCommanderFsm _fsm;
 };

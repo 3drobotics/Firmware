@@ -32,39 +32,18 @@
  ****************************************************************************/
 
 /**
- * @file mini_commander.cpp
+ * @file mini_commander_fsm.h
  *
- * Lean mini version of the big brother commander.
+ * Finite state machine for the mini commander.
  *
  * @author Julian Oes <julian@oes.ch>
  */
 
-#include "mini_commander.h"
 
-MiniCommander::MiniCommander() :
-	_task_is_running(false),
-	_task_should_exit(false),
-	_fsm()
-{}
-
-MiniCommander::~MiniCommander()
-{}
-
-void
-MiniCommander::task_main()
+class MiniCommanderFsm
 {
-	_task_is_running = true;
-	while (!_task_should_exit) {
-
-		// TODO: do something meaningful
-		PX4_INFO("mini commander running");
-		usleep(1000000);
-	}
-	_task_is_running = false;
-}
-
-void
-MiniCommander::print_status()
-{
-	// TODO: say something
-}
+public:
+	MiniCommanderFsm() {}
+	~MiniCommanderFsm() {}
+private:
+};
