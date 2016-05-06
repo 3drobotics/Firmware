@@ -48,6 +48,8 @@
  */
 extern "C" __EXPORT int mini_commander_main(int argc, char *argv[]);
 
+namespace mini_commander {
+
 /*
  * Print the correct usage.
  */
@@ -58,17 +60,30 @@ void usage(const char *reason);
  */
 static void task_main_trampoline();
 
+static int _task = -1;
+static MiniCommander *_instance = nullptr;
 
-namespace mini_commander {
-	static int _task = -1;
-	static MiniCommander *_instance = nullptr;
+void usage(const char *reason)
+{
+	if (reason && *reason > 0) {
+		PX4_WARN("%s", reason);
+	}
+
+	PX4_INFO("usage: mini_commander {start|stop|status}");
 }
+
+void task_main_trampoline()
+{
+	mini_commander::_instance->task_main();
+}
+
+} // namespace mini_commander
 
 
 int mini_commander_main(int argc, char *argv[])
 {
 	if (argc < 2) {
-		usage("missing command");
+		mini_commander::usage("missing command");
 		return -1;
 	}
 
@@ -92,7 +107,7 @@ int mini_commander_main(int argc, char *argv[])
 							   SCHED_DEFAULT,
 							   SCHED_PRIORITY_MAX - 5,
 							   1500,
-							   (px4_main_t)&task_main_trampoline,
+							   (px4_main_t)&mini_commander::task_main_trampoline,
 							   nullptr);
 
 		if (mini_commander::_task < 0) {
@@ -138,20 +153,7 @@ int mini_commander_main(int argc, char *argv[])
 		return 0;
 	}
 
-	usage("unrecognized command");
+	mini_commander::usage("unrecognized command");
 	return -1;
 }
 
-void usage(const char *reason)
-{
-	if (reason && *reason > 0) {
-		PX4_WARN("%s", reason);
-	}
-
-	PX4_INFO("usage: mini_commander {start|stop|status}");
-}
-
-void task_main_trampoline()
-{
-	mini_commander::_instance->task_main();
-}
