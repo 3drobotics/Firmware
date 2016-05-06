@@ -32,7 +32,7 @@
  ****************************************************************************/
 
 /**
- * @file mini_commander.cpp
+ * @file mini_commander.h
  *
  * Lean mini version of the big brother commander.
  *
