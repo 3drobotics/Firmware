@@ -36,7 +36,6 @@ px4_add_module(
 	STACK_MAIN 4096
 	STACK_MAX 2450
 	COMPILE_FLAGS
-		-Os
 	SRCS
 		mini_commander_main.cpp
 		mini_commander.cpp

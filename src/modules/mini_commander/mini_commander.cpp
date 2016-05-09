@@ -39,12 +39,23 @@
  * @author Julian Oes <julian@oes.ch>
  */
 
+#include <uORB/uORB.h>
+#include <uORB/topics/battery_status.h>
+#include <uORB/topics/offboard_control_mode.h>
+#include <uORB/topics/vehicle_global_position.h>
+#include <uORB/topics/vehicle_attitude.h>
+#include <uORB/topics/vehicle_land_detected.h>
+
 #include "mini_commander.h"
 
 MiniCommander::MiniCommander() :
 	_task_is_running(false),
 	_task_should_exit(false),
 	_battery_status_sub(-1),
+	_offboard_control_mode_sub(-1),
+	_vehicle_global_position_sub(-1),
+	_vehicle_attitude_sub(-1),
+	_vehicle_land_detected_sub(-1),
 	_fsm()
 {}
 
@@ -58,6 +69,7 @@ MiniCommander::task_main()
 	while (!_task_should_exit) {
 
 		_check_topics();
+		_publish_topics();
 		usleep(_approx_interval_us);
 	}
 	_task_is_running = false;
@@ -73,6 +85,19 @@ void
 MiniCommander::_check_topics()
 {
 	_check_battery_status();
+	_check_offboard_control_mode();
+	_check_vehicle_global_position();
+	_check_vehicle_attitude();
+	_check_vehicle_land_detected();
+}
+
+void
+MiniCommander::_publish_topics()
+{
+	_publish_home_position();
+	_publish_vehicle_control_mode();
+	_publish_vehicle_status();
+	_publish_actuator_armed();
 }
 
 void
@@ -95,4 +120,96 @@ MiniCommander::_check_battery_status()
 			// TODO: maybe do something
 		}
 	}
+}
+
+void
+MiniCommander::_check_offboard_control_mode()
+{
+	if (_offboard_control_mode_sub == -1) {
+		_offboard_control_mode_sub = orb_subscribe(ORB_ID(offboard_control_mode));
+	}
+
+	bool updated;
+	orb_check(_offboard_control_mode_sub, &updated);
+
+	if (updated) {
+		offboard_control_mode_s offboard_control_mode;
+		orb_copy(ORB_ID(offboard_control_mode), _offboard_control_mode_sub, &offboard_control_mode);
+
+		// TODO: do something useful
+	}
+}
+
+void
+MiniCommander::_check_vehicle_global_position()
+{
+	if (_vehicle_global_position_sub == -1) {
+		_vehicle_global_position_sub = orb_subscribe(ORB_ID(vehicle_global_position));
+	}
+
+	bool updated;
+	orb_check(_vehicle_global_position_sub, &updated);
+
+	if (updated) {
+		vehicle_global_position_s vehicle_global_position;
+		orb_copy(ORB_ID(vehicle_global_position), _vehicle_global_position_sub, &vehicle_global_position);
+
+		// TODO: do something useful
+	}
+}
+
+void
+MiniCommander::_check_vehicle_attitude()
+{
+	if (_vehicle_attitude_sub == -1) {
+		_vehicle_attitude_sub = orb_subscribe(ORB_ID(vehicle_attitude));
+	}
+
+	bool updated;
+	orb_check(_vehicle_attitude_sub, &updated);
+
+	if (updated) {
+		vehicle_status_s vehicle_attitude;
+		orb_copy(ORB_ID(vehicle_attitude), _vehicle_attitude_sub, &vehicle_attitude);
+
+		// TODO: do something useful
+	}
+}
+
+void
+MiniCommander::_check_vehicle_land_detected()
+{
+	if (_vehicle_land_detected_sub == -1) {
+		_vehicle_land_detected_sub = orb_subscribe(ORB_ID(vehicle_land_detected));
+	}
+
+	bool updated;
+	orb_check(_vehicle_land_detected_sub, &updated);
+
+	if (updated) {
+		vehicle_land_detected_s vehicle_land_detected;
+		orb_copy(ORB_ID(vehicle_land_detected), _vehicle_land_detected_sub, &vehicle_land_detected);
+
+		// TODO: do something useful
+	}
+}
+
+void MiniCommander::_publish_home_position()
+{
+	// TODO: actually do this
+}
+
+void MiniCommander::_publish_vehicle_control_mode()
+{
+	// TODO: actually do this
+}
+
+void MiniCommander::_publish_vehicle_status()
+{
+	// TODO: actually do this
+}
+
+void MiniCommander::_publish_actuator_armed()
+{
+	// TODO: actually do this
 }
