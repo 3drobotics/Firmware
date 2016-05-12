@@ -8,6 +8,7 @@ autodeclination_test
 rc_input_test
 conversion_test
 param_test
+mini_commander_test
 *.a
 sample_unittest
 CMakeCache.txt

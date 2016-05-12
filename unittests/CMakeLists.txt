@@ -82,13 +82,13 @@ function(add_gtest)
 	endforeach()
 endfunction()
 
-add_library(px4_platform 
-			${PX4_SITL_BUILD}/src/modules/param/px4_parameters.c                         
-			${PX4_SRC}/drivers/device/device_posix.cpp 
-			${PX4_SRC}/drivers/device/i2c_posix.cpp 
+add_library(px4_platform
+			${PX4_SITL_BUILD}/src/modules/param/px4_parameters.c
+			${PX4_SRC}/drivers/device/device_posix.cpp
+			${PX4_SRC}/drivers/device/i2c_posix.cpp
 			${PX4_SRC}/drivers/device/ringbuffer.cpp
-			${PX4_SRC}/drivers/device/sim.cpp 
-			${PX4_SRC}/drivers/device/vdev.cpp 
+			${PX4_SRC}/drivers/device/sim.cpp
+			${PX4_SRC}/drivers/device/vdev.cpp
 			${PX4_SRC}/drivers/device/vdev_posix.cpp
 			${PX4_SRC}/drivers/device/vfile.cpp
 			${PX4_SRC}/platforms/posix/px4_layer/drv_hrt.c
@@ -112,8 +112,8 @@ add_library(px4_platform
 			${PX4_SRC}/platforms/posix/work_queue/work_lock.c
 			${PX4_SRC}/platforms/posix/work_queue/work_queue.c
 			${PX4_SRC}/platforms/posix/work_queue/work_thread.c
-			)                           
-target_include_directories(px4_platform PUBLIC ${PX4_SRC}/platforms)                           
+			)
+target_include_directories(px4_platform PUBLIC ${PX4_SRC}/platforms)
 
 
 #######################################################################
@@ -165,6 +165,15 @@ add_gtest(rc_input_test)
 add_executable(sf0x_test sf0x_test.cpp
 						${PX4_SRC}/drivers/sf0x/sf0x_parser.cpp)
 add_gtest(sf0x_test)
+
+# mini_commander_test
+add_executable(mini_commander_test
+	${PX_SRC}/modules/mini_commander/mini_commander_test.cpp
+	${PX_SRC}/modules/mini_commander/mini_commander_fsm.cpp
+)
+target_link_libraries(mini_commander_test px4_platform)
+set_target_properties(mini_commander_test PROPERTIES COMPILE_FLAGS "-DMOCK_TIME")
+add_gtest(mini_commander_test)
 
 # param_test
 add_executable(param_test param_test.cpp uorb_stub.cpp

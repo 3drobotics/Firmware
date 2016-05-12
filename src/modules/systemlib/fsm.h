@@ -32,55 +32,76 @@
  ****************************************************************************/
 
 /**
- * @file mini_commander.h
+ * @file fsm.h
  *
- * Lean mini version of the big brother commander.
+ * Simple finite state machine borrowed from:
+ * http://codereview.stackexchange.com/questions/40686/state-pattern-c-template
+ * (licensed as public domain).
  *
  * @author Julian Oes <julian@oes.ch>
  */
 
 #pragma once
 
-#include <px4_posix.h>
-#include "mini_commander_fsm.h"
+#include <memory>
 
+namespace fsm {
 
-class MiniCommander
+template <class State>
+using StateRef = std::unique_ptr<State>;
+
+template <typename StateMachine, class State>
+class GenericState
 {
 public:
-	MiniCommander();
-	~MiniCommander();
+	GenericState(StateMachine &machine, StateRef<State> &state) :
+		_machine(machine),
+		_state(state)
+	{
+	}
 
-	bool is_running() { return _task_is_running; }
+	virtual ~GenericState()
+	{
+	}
 
-	/* Print some info. */
-	void print_status();
+	template <class ConcreteState>
+	static void init(StateMachine &machine, StateRef<State> &state)
+	{
+		state = StateRef<State>(new ConcreteState(machine, state));
+		state->entry();
+	}
 
-	void task_main();
+	/*
+	 * Run the current state once
+	 *
+	 * This can be used to implement e.g. a timeout mechanism: Every time
+	 * this function is called, it can check if it has reached the timeout
+	 * and react to it.
+	 */
+	virtual void spin()
+	{
+	}
+
+protected:
+	template <class ConcreteState>
+	void change()
+	{
+		exit();
+		init<ConcreteState>(_machine, _state);
+	}
+
+	StateMachine &_machine;
+
 private:
-	void _check_topics();
-	void _check_battery_status();
-	void _check_offboard_control_mode();
-	void _check_vehicle_global_position();
-	void _check_vehicle_attitude();
-	void _check_vehicle_land_detected();
+	virtual void entry()
+	{
+	}
 
-	void _publish_topics();
-	void _publish_home_position();
-	void _publish_vehicle_control_mode();
-	void _publish_vehicle_status();
-	void _publish_actuator_armed();
+	virtual void exit()
+	{
+	}
 
-
-	bool _task_is_running;
-	bool _task_should_exit;
-	static constexpr unsigned _approx_interval_us = 100000;
-
-	int _battery_status_sub;
-	int _offboard_control_mode_sub;
-	int _vehicle_global_position_sub;
-	int _vehicle_attitude_sub;
-	int _vehicle_land_detected_sub;
-
-	MiniCommanderFsm _fsm;
+	StateRef<State> &_state;
 };
+
+} // namespace fsm

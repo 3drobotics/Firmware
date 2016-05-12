@@ -69,6 +69,9 @@ MiniCommander::task_main()
 	while (!_task_should_exit) {
 
 		_check_topics();
+
+		_fsm.spin();
+
 		_publish_topics();
 		usleep(_approx_interval_us);
 	}
@@ -78,7 +81,7 @@ MiniCommander::task_main()
 void
 MiniCommander::print_status()
 {
-	// TODO: say something
+	PX4_INFO("current navigation state: %d", _fsm.get_nav_state());
 }
 
 void
