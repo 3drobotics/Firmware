@@ -169,7 +169,7 @@ MiniCommander::_check_vehicle_attitude()
 	orb_check(_vehicle_attitude_sub, &updated);
 
 	if (updated) {
-		vehicle_status_s vehicle_attitude;
+		vehicle_attitude_s vehicle_attitude;
 		orb_copy(ORB_ID(vehicle_attitude), _vehicle_attitude_sub, &vehicle_attitude);
 
 		// TODO: do something useful
