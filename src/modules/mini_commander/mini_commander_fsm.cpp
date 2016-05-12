@@ -32,55 +32,21 @@
  ****************************************************************************/
 
 /**
- * @file mini_commander.h
+ * @file mini_commander_fsm.cpp
  *
- * Lean mini version of the big brother commander.
+ * Finite state machine for the mini commander.
  *
  * @author Julian Oes <julian@oes.ch>
  */
 
-#pragma once
-
-#include <px4_posix.h>
 #include "mini_commander_fsm.h"
 
-
-class MiniCommander
+MiniCommanderFsm::MiniCommanderFsm()
 {
-public:
-	MiniCommander();
-	~MiniCommander();
+	State::init<Disabled>(*this, state);
+}
 
-	bool is_running() { return _task_is_running; }
+MiniCommanderFsm::~MiniCommanderFsm()
+{
+}
 
-	/* Print some info. */
-	void print_status();
-
-	void task_main();
-private:
-	void _check_topics();
-	void _check_battery_status();
-	void _check_offboard_control_mode();
-	void _check_vehicle_global_position();
-	void _check_vehicle_attitude();
-	void _check_vehicle_land_detected();
-
-	void _publish_topics();
-	void _publish_home_position();
-	void _publish_vehicle_control_mode();
-	void _publish_vehicle_status();
-	void _publish_actuator_armed();
-
-
-	bool _task_is_running;
-	bool _task_should_exit;
-	static constexpr unsigned _approx_interval_us = 100000;
-
-	int _battery_status_sub;
-	int _offboard_control_mode_sub;
-	int _vehicle_global_position_sub;
-	int _vehicle_attitude_sub;
-	int _vehicle_land_detected_sub;
-
-	MiniCommanderFsm _fsm;
-};
