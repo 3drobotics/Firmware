@@ -5,6 +5,7 @@
 
 #include <modules/uORB/topics/vehicle_status.h>
 #include <modules/mini_commander/failsafe_state_machine.h>
+#include <modules/mini_commander/arming_state_machine.h>
 
 #include "gtest/gtest.h"
 
@@ -23,10 +24,11 @@ uint64_t hrt_absolute_time_mock()
  * During waiting, we need to continuously spin the state machine to check
  * timeouts.
  */
-void spin_for(uint64_t time_us, uint64_t interval_us, FailsafeStateMachine &failsafe_sm)
+template <class StateMachine>
+void spin_for(uint64_t time_us, uint64_t interval_us, StateMachine &sm)
 {
 	for (uint64_t i = 0; i < time_us; i += interval_us) {
-		failsafe_sm.spin();
+		sm.spin();
 		absolute_time_us += interval_us;
 	}
 }
@@ -163,4 +165,71 @@ TEST(MiniCommanderTest, FailsafeStateMachineWaitTimeout)
 	/* However, after 6s ( > 5s), we should end up in RTL. */
 	spin_for(4000000, 100000, failsafe_sm);
 	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_RTL);
+}
+
+/*
+ * Tests for the arming state machine.
+ */
+TEST(MiniCommanderTest, ArmingStateMachine)
+{
+	ArmingStateMachine arming_sm;
+
+	/* We must be disarmed on startup! */
+	ASSERT_FALSE(arming_sm.is_armed());
+
+	/* Don't allow arming without home position. */
+	arming_sm.arming_requested();
+	ASSERT_FALSE(arming_sm.is_armed());
+
+	/* Now a home position is supplied. */
+	arming_sm.home_position_set();
+	ASSERT_FALSE(arming_sm.is_armed());
+
+	/* Request again. */
+	arming_sm.arming_requested();
+	ASSERT_TRUE(arming_sm.is_armed());
+
+	/* Being landed after arming doesn't mean we disarm straightaway. */
+	arming_sm.landed();
+	ASSERT_TRUE(arming_sm.is_armed());
+
+	/* After a timeout of 1s we're still armed. */
+	spin_for(1000000, 100000, arming_sm);
+	ASSERT_TRUE(arming_sm.is_armed());
+
+	/* But after 6s, we're disarmed again. */
+	spin_for(5000000, 100000, arming_sm);
+	ASSERT_FALSE(arming_sm.is_armed());
+
+	/* Let's try to arm again, again we need home first. */
+	arming_sm.arming_requested();
+	ASSERT_FALSE(arming_sm.is_armed());
+
+	/* Ok, give it home. */
+	arming_sm.home_position_set();
+	ASSERT_FALSE(arming_sm.is_armed());
+	arming_sm.arming_requested();
+	ASSERT_TRUE(arming_sm.is_armed());
+
+	/* Now let's take off. */
+	arming_sm.in_air();
+	ASSERT_TRUE(arming_sm.is_armed());
+
+	/* Throw random request at it. */
+	arming_sm.arming_requested();
+	ASSERT_TRUE(arming_sm.is_armed());
+
+	arming_sm.home_position_set();
+	ASSERT_TRUE(arming_sm.is_armed());
+
+	arming_sm.in_air();
+	ASSERT_TRUE(arming_sm.is_armed());
+
+	/* Land again, we should disarm. */
+	arming_sm.landed();
+	ASSERT_FALSE(arming_sm.is_armed());
+
+	/* In air once again doesn't bother us. */
+	arming_sm.in_air();
+	ASSERT_FALSE(arming_sm.is_armed());
 }

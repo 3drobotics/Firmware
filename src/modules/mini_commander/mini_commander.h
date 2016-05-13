@@ -49,6 +49,7 @@
 #include <uORB/topics/home_position.h>
 
 #include "failsafe_state_machine.h"
+#include "arming_state_machine.h"
 
 
 
@@ -116,4 +117,5 @@ private:
 	actuator_armed_s _actuator_armed;
 
 	FailsafeStateMachine _failsafe_sm;
+	ArmingStateMachine _arming_sm;
 };
