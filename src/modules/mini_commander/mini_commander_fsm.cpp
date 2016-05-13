@@ -41,7 +41,9 @@
 
 #include "mini_commander_fsm.h"
 
-MiniCommanderFsm::MiniCommanderFsm()
+MiniCommanderFsm::MiniCommanderFsm() :
+		_is_landed(true),
+		_is_gps_ok(false)
 {
 	State::init<Disabled>(*this, state);
 }

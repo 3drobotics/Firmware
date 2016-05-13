@@ -34,7 +34,7 @@
 /**
  * @file mini_commander_fsm.h
  *
- * Finite state machine for the mini commander.
+ * Hierarchical state machine for the mini commander.
  *
  * @author Julian Oes <julian@oes.ch>
  */
@@ -63,6 +63,7 @@ class MiniCommanderFsm
 {
 public:
 	MiniCommanderFsm();
+
 	~MiniCommanderFsm();
 
 public:
@@ -70,24 +71,41 @@ public:
 	{
 		state->offboard_ok();
 	}
+
 	void offboard_lost()
 	{
 		state->offboard_lost();
 	}
+
 	void gps_ok()
 	{
+		/* Update internal state. */
+		_is_gps_ok = true;
+
 		state->gps_ok();
 	}
+
 	void gps_lost()
 	{
+		/* Update internal state. */
+		_is_gps_ok = false;
+
 		state->gps_lost();
 	}
+
 	void landed()
 	{
+		/* Update internal state. */
+		_is_landed = true;
+
 		state->landed();
 	}
+
 	void in_air()
 	{
+		/* Update internal state. */
+		_is_landed = false;
+
 		state->in_air();
 	}
 
@@ -185,7 +203,15 @@ private:
 
 		void offboard_lost()
 		{
-			change<Failsafe>();
+			if (_machine._is_landed) {
+				/* If we are not in-air, there is no point going into
+				 * failsafe, just go straight to disabled. */
+
+				change<Disabled>();
+
+			} else {
+				change<Failsafe>();
+			}
 		}
 	};
 
@@ -202,7 +228,17 @@ private:
 		void entry()
 		{
 			PX4_INFO("In failsafe!");
-			FailsafeState::init<FailsafeWait>(_machine, failsafe_state);
+
+			/* When entering failsafe, look at GPS ok flag to decide
+			 * where to go. */
+			if (_machine._is_gps_ok) {
+				/* With GPS, we can just wait for a bit. */
+				FailsafeState::init<FailsafeWait>(_machine, failsafe_state);
+
+			} else {
+				/* Without GPS, we have to descend. */
+				FailsafeState::init<FailsafeDescend>(_machine, failsafe_state);
+			}
 		}
 
 		void exit()
@@ -326,4 +362,16 @@ private:
 			change<FailsafeWait>();
 		}
 	};
+
+	/*
+	 * The state machine needs to keep track internally of the flags about
+	 * GPS and landed because it needs to evaluate forks when entering the
+	 * failsafe state from offboard.
+	 *
+	 * This is a hacky approach but it prevents the state diagram from
+	 * blowing up too much because we don't need hierarchical states for
+	 * all possible combinations.
+	 */
+	bool _is_landed;
+	bool _is_gps_ok;
 };

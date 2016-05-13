@@ -37,64 +37,80 @@ void spin_for(uint64_t time_us, uint64_t interval_us, MiniCommanderFsm &fsm)
 TEST(MiniCommanderTest, Fsm)
 {
 	MiniCommanderFsm fsm;
+	/* We should start in MANUAL which corresponds to Disabled. */
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_MANUAL);
 
+	/* Once offboard is ok, we can go into offboard. */
 	fsm.offboard_ok();
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
 
-	// GPS lost in offboard shouldn't change anything.
+	/* GPS lost in offboard shouldn't change anything because that's
+	 * supposed to be handled in the offboard controller. */
 	fsm.gps_lost();
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
 
-	fsm.offboard_lost();
-	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
+	/* We took off in offboard. */
+	fsm.in_air();
+	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
 
+	/* However, once offboard is lost (and without GPS), we have to descend. */
+	fsm.offboard_lost();
+	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_DESCEND);
+
+	/* Offboard is good again, do whatever offboard wants. */
 	fsm.offboard_ok();
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
 
+	/* Oh, offboard lost again, once again to descend. */
 	fsm.offboard_lost();
-	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
+	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_DESCEND);
 
+	/* Yes GPS is still lost, no change. */
 	fsm.gps_lost();
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_DESCEND);
 
+	/* Ok offboard back once again. */
 	fsm.offboard_ok();
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
 
-	// Even though we have lost GPS before, we end up in loiter until the GPS lost event is triggered again.
+	/* Now GPS is recovered in offboard */
+	fsm.gps_ok();
+	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
+
+	/* Offboard lost should now wait, and not descend. */
 	fsm.offboard_lost();
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
 
+	/* We lost GPS anyway, let's descend */
 	fsm.gps_lost();
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_DESCEND);
 
-	fsm.landed();
-	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_MANUAL);
-
-	// GPS lost in landed shouldn't change anything.
-	fsm.gps_lost();
-	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_MANUAL);
-
-	// Let's go to RTL and check that GPS out goes to descend.
-	fsm.offboard_ok();
-	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
-	fsm.offboard_lost();
+	/* GPS back, wait again. */
+	fsm.gps_ok();
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
+
+	/* Let's let the timer expire and go into RTL. */
 	spin_for(60000000, 10000, fsm);
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_RTL);
+
+	/* GPS lost again, to descend. */
 	fsm.gps_lost();
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_DESCEND);
+
+	/* Oh, GPS is back, let's wait once again. */
+	fsm.gps_ok();
+	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
+
+	/* Timeout to RTL again */
+	spin_for(60000000, 10000, fsm);
+	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_RTL);
+
+	/* We land successfully, go back to Disabled. */
 	fsm.landed();
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_MANUAL);
 
-	// Let's go to RTL again and check that it ends when landed.
-	fsm.offboard_ok();
-	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
-	fsm.offboard_lost();
-	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
-	spin_for(60000000, 10000, fsm);
-	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_RTL);
-	fsm.landed();
+	/* In air doesn't confuse use, we're still disabled. */
+	fsm.in_air();
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_MANUAL);
 }
 
@@ -105,36 +121,46 @@ TEST(MiniCommanderTest, FsmWaitTimeout)
 {
 	MiniCommanderFsm fsm;
 
+	/* Start in disabled, as usual. */
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_MANUAL);
 
+	/* We happen to have GPS today. */
+	fsm.gps_ok();
+	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_MANUAL);
+
+	/* Go to offboard, all normal. */
 	fsm.offboard_ok();
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
 
-	// Once offboard is lost, we should end up in loiter.
+	/* Taking off. */
+	fsm.in_air();
+	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
+
+	/* Once offboard is lost, we should end up in loiter. */
 	fsm.offboard_lost();
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
 
-	// After 2 seconds of spinning at 10 Hz, we should still be in loiter.
+	/* After 2 seconds of spinning at 10 Hz, we should still be in loiter. */
 	spin_for(2000000, 100000, fsm);
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
 
-	// However, after 6s ( > 5s), we should end up in RTL.
+	/* However, after 6s ( > 5s), we should end up in RTL. */
 	spin_for(4000000, 100000, fsm);
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_RTL);
 
-	// Try if we can go back to offboard.
+	/* Try if we can go back to offboard. */
 	fsm.offboard_ok();
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
 
-	// Try one more time to check if the timer resets.
+	/* Try one more time to check if the timer resets. */
 	fsm.offboard_lost();
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
 
-	// After 2 seconds of spinning at 10 Hz, we should still be in loiter.
+	/* After 2 seconds of spinning at 10 Hz, we should still be in loiter. */
 	spin_for(2000000, 100000, fsm);
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
 
-	// However, after 6s ( > 5s), we should end up in RTL.
+	/* However, after 6s ( > 5s), we should end up in RTL. */
 	spin_for(4000000, 100000, fsm);
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_RTL);
 }
