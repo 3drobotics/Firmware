@@ -98,7 +98,17 @@ MiniCommander::task_main()
 void
 MiniCommander::print_status()
 {
-	PX4_INFO("current navigation state: %d", _failsafe_sm.get_nav_state());
+	PX4_INFO("current navigation state: %s", _failsafe_sm.get_nav_state_str());
+	PX4_INFO("in failsafe: %s", _failsafe_sm.is_in_failsafe() ? "yes" : "no");
+	PX4_INFO("home positon set: %s", _home_position_set ? "yes" : "no");
+	PX4_INFO("armed: %s", _arming_sm.is_armed() ? "yes" : "no");
+	PX4_INFO("ready to arm: %s", _arming_sm.is_ready_to_arm() ? "yes" : "no");
+}
+
+void
+MiniCommander::arm()
+{
+	_arming_sm.arming_requested();
 }
 
 void
@@ -257,9 +267,12 @@ void MiniCommander::_set_home_position()
 	// TODO: check if this var is correct. */
 	_home_position.yaw = _vehicle_local_position.yaw;
 
-	_home_position_set = true;
-	// TODO: add an armed state machine for this.
-	//_failsafe_sm.home_position_set();
+	if (!_home_position_set) {
+		PX4_INFO("Home position set");
+		_home_position_set = true;
+	}
+
+	_arming_sm.home_position_set();
 
 	_publish_home_position();
 }
@@ -287,7 +300,42 @@ void MiniCommander::_publish_vehicle_control_mode()
 
 void MiniCommander::_publish_vehicle_status()
 {
-	// TODO: actually do this
+	vehicle_status_s vehicle_status;
+
+	vehicle_status.timestamp = hrt_absolute_time();
+	vehicle_status.nav_state = _failsafe_sm.get_nav_state();
+	vehicle_status.arming_state = _arming_sm.is_armed() ?
+				      vehicle_status_s::ARMING_STATE_ARMED :
+				      vehicle_status_s::ARMING_STATE_STANDBY;
+	vehicle_status.hil_state = vehicle_status_s::HIL_STATE_OFF;
+	vehicle_status.failsafe = _failsafe_sm.is_in_failsafe();
+
+	// TODO: Some stuff is just hardcoded here.
+	vehicle_status.system_type = 2; // quadrotor
+	vehicle_status.component_id = 1; // as the default
+	vehicle_status.is_rotary_wing = true;
+	vehicle_status.is_vtol = false; // not a hybrid
+	vehicle_status.vtol_fw_permanent_stab = false; // not applicable
+	vehicle_status.in_transition_mode = false; // not applicable
+	vehicle_status.in_transition_mode = false; // not applicable
+	vehicle_status.rc_signal_lost = false; // not applicable
+	vehicle_status.rc_input_mode = 1; // RC input disabled
+	vehicle_status.data_link_lost = false; // not applicable
+	vehicle_status.data_link_lost_counter = 0; // not applicable
+	vehicle_status.engine_failure = false; // not applicable
+	vehicle_status.engine_failure_cmd = false; // not applicable
+	vehicle_status.mission_failure = false; // not applicable
+	vehicle_status.onboard_control_sensors_present = 0; // unused
+	vehicle_status.onboard_control_sensors_enabled = 0; // unused
+	vehicle_status.onboard_control_sensors_health = 0; // unused
+
+	if (_vehicle_status_pub != nullptr) {
+
+		orb_publish(ORB_ID(vehicle_status), _vehicle_status_pub, &vehicle_status);
+
+	} else {
+		_vehicle_status_pub = orb_advertise(ORB_ID(vehicle_status), &vehicle_status);
+	}
 }
 
 void MiniCommander::_publish_actuator_armed()
