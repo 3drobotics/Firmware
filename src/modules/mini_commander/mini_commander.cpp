@@ -167,7 +167,7 @@ MiniCommander::_check_offboard_control_mode()
 	}
 
 	if (_offboard_control_mode.timestamp != 0 &&
-	    hrt_elapsed_time(&_offboard_control_mode.timestamp) < _offboard_timeout) {
+	    hrt_elapsed_time(&_offboard_control_mode.timestamp) < _offboard_timeout_us) {
 		_failsafe_sm.offboard_ok();
 
 	} else {
@@ -188,6 +188,15 @@ MiniCommander::_check_vehicle_global_position()
 	if (updated) {
 		orb_copy(ORB_ID(vehicle_global_position), _vehicle_global_position_sub, &_vehicle_global_position);
 		/* Just update the topic. */
+	}
+
+	/* TODO: improve these GPS ok/lost tests with estimator information. */
+	if (_vehicle_global_position.timestamp != 0 &&
+	    hrt_elapsed_time(&_vehicle_global_position.timestamp) < _vehicle_global_position_timeout_us) {
+		_failsafe_sm.gps_ok();
+
+	} else {
+		_failsafe_sm.gps_lost();
 	}
 }
 

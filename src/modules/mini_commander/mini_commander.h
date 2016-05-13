@@ -92,7 +92,8 @@ private:
 	bool _task_should_exit;
 	static constexpr unsigned _approx_interval_us = 100000;
 
-	static constexpr unsigned _offboard_timeout = 500000;
+	static constexpr unsigned _offboard_timeout_us = 500000;
+	static constexpr unsigned _vehicle_global_position_timeout_us = 1000000;
 
 	/* TODO: make these a parameter. */
 	static constexpr float _eph_threshold = 5.0f;
