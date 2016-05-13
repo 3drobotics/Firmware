@@ -168,9 +168,9 @@ add_gtest(sf0x_test)
 
 # mini_commander_test
 add_executable(mini_commander_test
-	${PX_SRC}/modules/mini_commander/mini_commander_test.cpp
-	${PX_SRC}/modules/mini_commander/failsafe_state_machine.cpp
-	${PX_SRC}/modules/mini_commander/arming_state_machine.cpp
+	${PX4_SRC}/modules/mini_commander/mini_commander_test.cpp
+	${PX4_SRC}/modules/mini_commander/failsafe_state_machine.cpp
+	${PX4_SRC}/modules/mini_commander/arming_state_machine.cpp
 )
 target_link_libraries(mini_commander_test px4_platform)
 set_target_properties(mini_commander_test PROPERTIES COMPILE_FLAGS "-DMOCK_TIME")
