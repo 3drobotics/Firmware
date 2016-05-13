@@ -142,7 +142,6 @@ private:
 
 		void landed()
 		{
-			PX4_INFO("we get the landed signal");
 			change<DisarmedNotReady>();
 		}
 

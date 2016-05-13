@@ -222,10 +222,14 @@ MiniCommander::_check_vehicle_land_detected()
 
 		/* Don't check a timeout for this topic, just accept whatever we get. */
 		if (_vehicle_land_detected.landed) {
+			PX4_INFO("landed");
 			_failsafe_sm.landed();
+			_arming_sm.landed();
 
 		} else {
+			PX4_INFO("in air");
 			_failsafe_sm.in_air();
+			_arming_sm.in_air();
 		}
 	}
 }
@@ -295,7 +299,127 @@ void MiniCommander::_publish_home_position()
 
 void MiniCommander::_publish_vehicle_control_mode()
 {
-	// TODO: actually do this
+	vehicle_control_mode_s vehicle_control_mode;
+
+	vehicle_control_mode.timestamp = hrt_absolute_time();
+	vehicle_control_mode.flag_armed = _arming_sm.is_armed();
+	vehicle_control_mode.flag_external_manual_override_ok = false; // not applicable
+	vehicle_control_mode.flag_system_hil_enabled = false; // not applicable
+
+	/* All these are common for all cases. */
+	vehicle_control_mode.flag_control_manual_enabled = false;
+	vehicle_control_mode.flag_control_rattitude_enabled = false;
+	vehicle_control_mode.flag_control_force_enabled = false; // not used in commander
+	vehicle_control_mode.flag_control_termination_enabled = false; // not used in commander
+
+	switch (_failsafe_sm.get_nav_state()) {
+	case vehicle_status_s::NAVIGATION_STATE_MANUAL:
+
+		/* We use MANUAL as disabled, so everything off. */
+		vehicle_control_mode.flag_control_auto_enabled = false;
+		vehicle_control_mode.flag_control_offboard_enabled = false;
+		vehicle_control_mode.flag_control_rates_enabled = false;
+		vehicle_control_mode.flag_control_attitude_enabled = false;
+		vehicle_control_mode.flag_control_acceleration_enabled = false;
+		vehicle_control_mode.flag_control_velocity_enabled = false;
+		vehicle_control_mode.flag_control_position_enabled = false;
+		vehicle_control_mode.flag_control_altitude_enabled = false;
+		vehicle_control_mode.flag_control_climb_rate_enabled = false;
+
+		break;
+
+	case vehicle_status_s::NAVIGATION_STATE_OFFBOARD:
+
+		/*
+		 * The control flags depend on what is ignored according to the offboard control mode topic
+		 * Inner loop flags (e.g. attitude) also depend on outer loop ignore flags (e.g. position)
+		 *
+		 * This section is mostly copied from commander.cpp.
+		 */
+
+		vehicle_control_mode.flag_control_rates_enabled =
+			!_offboard_control_mode.ignore_bodyrate ||
+			!_offboard_control_mode.ignore_attitude ||
+			!_offboard_control_mode.ignore_position ||
+			!_offboard_control_mode.ignore_velocity ||
+			!_offboard_control_mode.ignore_acceleration_force;
+
+		vehicle_control_mode.flag_control_attitude_enabled =
+			!_offboard_control_mode.ignore_attitude ||
+			!_offboard_control_mode.ignore_position ||
+			!_offboard_control_mode.ignore_velocity ||
+			!_offboard_control_mode.ignore_acceleration_force;
+
+		vehicle_control_mode.flag_control_acceleration_enabled =
+			!_offboard_control_mode.ignore_acceleration_force;
+
+		vehicle_control_mode.flag_control_velocity_enabled =
+			(!_offboard_control_mode.ignore_velocity ||
+			 !_offboard_control_mode.ignore_position) &&
+			!vehicle_control_mode.flag_control_acceleration_enabled;
+
+		vehicle_control_mode.flag_control_climb_rate_enabled =
+			(!_offboard_control_mode.ignore_velocity ||
+			 !_offboard_control_mode.ignore_position) &&
+			!vehicle_control_mode.flag_control_acceleration_enabled;
+
+		vehicle_control_mode.flag_control_position_enabled =
+			!_offboard_control_mode.ignore_position &&
+			!vehicle_control_mode.flag_control_acceleration_enabled;
+
+		vehicle_control_mode.flag_control_altitude_enabled =
+			(!_offboard_control_mode.ignore_velocity ||
+			 !_offboard_control_mode.ignore_position) &&
+			!vehicle_control_mode.flag_control_acceleration_enabled;
+
+		vehicle_control_mode.flag_control_offboard_enabled = true;
+		vehicle_control_mode.flag_control_auto_enabled = false;
+
+		break;
+
+	case vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER:
+
+	/* Fall through */
+	case vehicle_status_s::NAVIGATION_STATE_AUTO_RTL:
+
+		vehicle_control_mode.flag_control_auto_enabled = true;
+		vehicle_control_mode.flag_control_offboard_enabled = false;
+		vehicle_control_mode.flag_control_rates_enabled = true;
+		vehicle_control_mode.flag_control_attitude_enabled = true;
+		vehicle_control_mode.flag_control_altitude_enabled = true;
+		vehicle_control_mode.flag_control_climb_rate_enabled = true;
+		vehicle_control_mode.flag_control_position_enabled = true;
+		vehicle_control_mode.flag_control_velocity_enabled = true;
+		vehicle_control_mode.flag_control_acceleration_enabled = false;
+
+		break;
+
+	case vehicle_status_s::NAVIGATION_STATE_DESCEND:
+
+		vehicle_control_mode.flag_control_auto_enabled = true;
+		vehicle_control_mode.flag_control_offboard_enabled = false;
+		vehicle_control_mode.flag_control_rates_enabled = true;
+		vehicle_control_mode.flag_control_attitude_enabled = true;
+		vehicle_control_mode.flag_control_position_enabled = false;
+		vehicle_control_mode.flag_control_velocity_enabled = false;
+		vehicle_control_mode.flag_control_acceleration_enabled = false;
+		vehicle_control_mode.flag_control_altitude_enabled = false;
+		vehicle_control_mode.flag_control_climb_rate_enabled = true;
+
+		break;
+
+	default:
+		PX4_ERR("unknown mode");
+		break;
+	}
+
+	if (_vehicle_control_mode_pub != nullptr) {
+
+		orb_publish(ORB_ID(vehicle_control_mode), _vehicle_control_mode_pub, &vehicle_control_mode);
+
+	} else {
+		_vehicle_control_mode_pub = orb_advertise(ORB_ID(vehicle_control_mode), &vehicle_control_mode);
+	}
 }
 
 void MiniCommander::_publish_vehicle_status()

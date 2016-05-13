@@ -126,18 +126,23 @@ public:
 	const char *get_nav_state_str()
 	{
 		switch (state->get_nav_state()) {
-			case vehicle_status_s::NAVIGATION_STATE_MANUAL:
-				return "MANUAL";
-			case vehicle_status_s::NAVIGATION_STATE_OFFBOARD:
-				return "OFFBOARD";
-			case vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER:
-				return "AUTO_LOITER";
-			case vehicle_status_s::NAVIGATION_STATE_AUTO_RTL:
-				return "AUTO_RTL";
-			case vehicle_status_s::NAVIGATION_STATE_DESCEND:
-				return "AUTO_RTL";
-			default:
-				return "Unknown";
+		case vehicle_status_s::NAVIGATION_STATE_MANUAL:
+			return "MANUAL";
+
+		case vehicle_status_s::NAVIGATION_STATE_OFFBOARD:
+			return "OFFBOARD";
+
+		case vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER:
+			return "AUTO_LOITER";
+
+		case vehicle_status_s::NAVIGATION_STATE_AUTO_RTL:
+			return "AUTO_RTL";
+
+		case vehicle_status_s::NAVIGATION_STATE_DESCEND:
+			return "AUTO_RTL";
+
+		default:
+			return "Unknown";
 		}
 	}
 
