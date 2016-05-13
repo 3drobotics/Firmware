@@ -32,23 +32,21 @@
  ****************************************************************************/
 
 /**
- * @file mini_commander_fsm.cpp
- *
- * Finite state machine for the mini commander.
+ * @file failsafe_state_machine.cpp
  *
  * @author Julian Oes <julian@oes.ch>
  */
 
-#include "mini_commander_fsm.h"
+#include "failsafe_state_machine.h"
 
-MiniCommanderFsm::MiniCommanderFsm() :
-		_is_landed(true),
-		_is_gps_ok(false)
+FailsafeStateMachine::FailsafeStateMachine() :
+	_is_landed(true),
+	_is_gps_ok(false)
 {
 	State::init<Disabled>(*this, state);
 }
 
-MiniCommanderFsm::~MiniCommanderFsm()
+FailsafeStateMachine::~FailsafeStateMachine()
 {
 }
 

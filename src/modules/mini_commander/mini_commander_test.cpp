@@ -4,7 +4,7 @@
 #include <unistd.h>
 
 #include <modules/uORB/topics/vehicle_status.h>
-#include <modules/mini_commander/mini_commander_fsm.h>
+#include <modules/mini_commander/failsafe_state_machine.h>
 
 #include "gtest/gtest.h"
 
@@ -23,7 +23,7 @@ uint64_t hrt_absolute_time_mock()
  * During waiting, we need to continuously spin the state machine to check
  * timeouts.
  */
-void spin_for(uint64_t time_us, uint64_t interval_us, MiniCommanderFsm &fsm)
+void spin_for(uint64_t time_us, uint64_t interval_us, FailsafeStateMachine &fsm)
 {
 	for (uint64_t i = 0; i < time_us; i += interval_us) {
 		fsm.spin();
@@ -34,9 +34,9 @@ void spin_for(uint64_t time_us, uint64_t interval_us, MiniCommanderFsm &fsm)
 /*
  * Try to go as exhaustive as possible through all the states and transitions.
  */
-TEST(MiniCommanderTest, Fsm)
+TEST(MiniCommanderTest, FailsafeStateMachine)
 {
-	MiniCommanderFsm fsm;
+	FailsafeStateMachine fsm;
 	/* We should start in MANUAL which corresponds to Disabled. */
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_MANUAL);
 
@@ -117,9 +117,9 @@ TEST(MiniCommanderTest, Fsm)
 /*
  * Specific tests for the timeout behaviour of the state machine.
  */
-TEST(MiniCommanderTest, FsmWaitTimeout)
+TEST(MiniCommanderTest, FailsafeStateMachineWaitTimeout)
 {
-	MiniCommanderFsm fsm;
+	FailsafeStateMachine fsm;
 
 	/* Start in disabled, as usual. */
 	ASSERT(fsm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_MANUAL);

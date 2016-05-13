@@ -48,7 +48,7 @@
 #include <uORB/topics/vehicle_land_detected.h>
 #include <uORB/topics/home_position.h>
 
-#include "mini_commander_fsm.h"
+#include "failsafe_state_machine.h"
 
 
 
@@ -115,5 +115,5 @@ private:
 
 	actuator_armed_s _actuator_armed;
 
-	MiniCommanderFsm _fsm;
+	FailsafeStateMachine _fsm;
 };

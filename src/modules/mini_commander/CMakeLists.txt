@@ -39,7 +39,7 @@ px4_add_module(
 	SRCS
 		mini_commander_main.cpp
 		mini_commander.cpp
-		mini_commander_fsm.cpp
+		failsafe_state_machine.cpp
 	DEPENDS
 		platforms__common
 	)
