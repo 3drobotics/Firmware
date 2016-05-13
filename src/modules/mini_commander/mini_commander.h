@@ -42,7 +42,14 @@
 #pragma once
 
 #include <px4_posix.h>
+#include <uORB/topics/offboard_control_mode.h>
+#include <uORB/topics/vehicle_global_position.h>
+#include <uORB/topics/vehicle_local_position.h>
+#include <uORB/topics/vehicle_land_detected.h>
+#include <uORB/topics/home_position.h>
+
 #include "mini_commander_fsm.h"
+
 
 
 class MiniCommander
@@ -62,8 +69,13 @@ private:
 	void _check_battery_status();
 	void _check_offboard_control_mode();
 	void _check_vehicle_global_position();
-	void _check_vehicle_attitude();
+	void _check_vehicle_local_position();
 	void _check_vehicle_land_detected();
+
+	/*
+	 * Try to set the home position.
+	 */
+	void _set_home_position();
 
 	void _publish_topics();
 	void _publish_home_position();
@@ -76,11 +88,32 @@ private:
 	bool _task_should_exit;
 	static constexpr unsigned _approx_interval_us = 100000;
 
+	static constexpr unsigned _offboard_timeout = 500000;
+
+	/* TODO: make these a parameter. */
+	static constexpr float _eph_threshold = 5.0f;
+	static constexpr float _epv_threshold = 10.0f;
+
 	int _battery_status_sub;
 	int _offboard_control_mode_sub;
 	int _vehicle_global_position_sub;
-	int _vehicle_attitude_sub;
+	int _vehicle_local_position_sub;
 	int _vehicle_land_detected_sub;
+
+	orb_advert_t _home_position_pub;
+	orb_advert_t _vehicle_control_mode_pub;
+	orb_advert_t _vehicle_status_pub;
+	orb_advert_t _actuator_armed_pub;
+
+	offboard_control_mode_s _offboard_control_mode;
+	vehicle_global_position_s _vehicle_global_position;
+	vehicle_local_position_s _vehicle_local_position;
+	vehicle_land_detected_s _vehicle_land_detected;
+
+	home_position_s _home_position;
+	bool _home_position_set;
+
+	actuator_armed_s _actuator_armed;
 
 	MiniCommanderFsm _fsm;
 };

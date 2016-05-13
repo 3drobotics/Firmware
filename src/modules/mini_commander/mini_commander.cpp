@@ -41,10 +41,6 @@
 
 #include <uORB/uORB.h>
 #include <uORB/topics/battery_status.h>
-#include <uORB/topics/offboard_control_mode.h>
-#include <uORB/topics/vehicle_global_position.h>
-#include <uORB/topics/vehicle_attitude.h>
-#include <uORB/topics/vehicle_land_detected.h>
 
 #include "mini_commander.h"
 
@@ -54,10 +50,24 @@ MiniCommander::MiniCommander() :
 	_battery_status_sub(-1),
 	_offboard_control_mode_sub(-1),
 	_vehicle_global_position_sub(-1),
-	_vehicle_attitude_sub(-1),
+	_vehicle_local_position_sub(-1),
 	_vehicle_land_detected_sub(-1),
+	_home_position_pub(nullptr),
+	_vehicle_control_mode_pub(nullptr),
+	_vehicle_status_pub(nullptr),
+	_actuator_armed_pub(nullptr),
+	_offboard_control_mode{},
+	_vehicle_global_position{},
+	_vehicle_local_position{},
+	_vehicle_land_detected{},
+	_home_position{},
+	_home_position_set(false),
+	_actuator_armed{},
 	_fsm()
-{}
+{
+	/* We really want to make sure we're disarmed on startup. */
+	_actuator_armed.armed = false;
+}
 
 MiniCommander::~MiniCommander()
 {}
@@ -69,6 +79,11 @@ MiniCommander::task_main()
 	while (!_task_should_exit) {
 
 		_check_topics();
+
+		/* Continuously try to set home position unless armed. */
+		if (!_actuator_armed.armed) {
+			_set_home_position();
+		}
 
 		_fsm.spin();
 
@@ -90,14 +105,14 @@ MiniCommander::_check_topics()
 	_check_battery_status();
 	_check_offboard_control_mode();
 	_check_vehicle_global_position();
-	_check_vehicle_attitude();
+	_check_vehicle_local_position();
 	_check_vehicle_land_detected();
 }
 
 void
 MiniCommander::_publish_topics()
 {
-	_publish_home_position();
+	/* Note that the home position is published in _set_home_position() */
 	_publish_vehicle_control_mode();
 	_publish_vehicle_status();
 	_publish_actuator_armed();
@@ -136,10 +151,15 @@ MiniCommander::_check_offboard_control_mode()
 	orb_check(_offboard_control_mode_sub, &updated);
 
 	if (updated) {
-		offboard_control_mode_s offboard_control_mode;
-		orb_copy(ORB_ID(offboard_control_mode), _offboard_control_mode_sub, &offboard_control_mode);
+		orb_copy(ORB_ID(offboard_control_mode), _offboard_control_mode_sub, &_offboard_control_mode);
+	}
 
-		// TODO: do something useful
+	if (_offboard_control_mode.timestamp != 0 &&
+	    hrt_elapsed_time(&_offboard_control_mode.timestamp) < _offboard_timeout) {
+		_fsm.offboard_ok();
+
+	} else {
+		_fsm.offboard_lost();
 	}
 }
 
@@ -154,28 +174,24 @@ MiniCommander::_check_vehicle_global_position()
 	orb_check(_vehicle_global_position_sub, &updated);
 
 	if (updated) {
-		vehicle_global_position_s vehicle_global_position;
-		orb_copy(ORB_ID(vehicle_global_position), _vehicle_global_position_sub, &vehicle_global_position);
-
-		// TODO: do something useful
+		orb_copy(ORB_ID(vehicle_global_position), _vehicle_global_position_sub, &_vehicle_global_position);
+		/* Just update the topic. */
 	}
 }
 
 void
-MiniCommander::_check_vehicle_attitude()
+MiniCommander::_check_vehicle_local_position()
 {
-	if (_vehicle_attitude_sub == -1) {
-		_vehicle_attitude_sub = orb_subscribe(ORB_ID(vehicle_attitude));
+	if (_vehicle_local_position_sub == -1) {
+		_vehicle_local_position_sub = orb_subscribe(ORB_ID(vehicle_local_position));
 	}
 
 	bool updated;
-	orb_check(_vehicle_attitude_sub, &updated);
+	orb_check(_vehicle_local_position_sub, &updated);
 
 	if (updated) {
-		vehicle_attitude_s vehicle_attitude;
-		orb_copy(ORB_ID(vehicle_attitude), _vehicle_attitude_sub, &vehicle_attitude);
-
-		// TODO: do something useful
+		orb_copy(ORB_ID(vehicle_local_position), _vehicle_local_position_sub, &_vehicle_local_position);
+		/* Just update the topic. */
 	}
 }
 
@@ -190,16 +206,76 @@ MiniCommander::_check_vehicle_land_detected()
 	orb_check(_vehicle_land_detected_sub, &updated);
 
 	if (updated) {
-		vehicle_land_detected_s vehicle_land_detected;
-		orb_copy(ORB_ID(vehicle_land_detected), _vehicle_land_detected_sub, &vehicle_land_detected);
+		orb_copy(ORB_ID(vehicle_land_detected), _vehicle_land_detected_sub, &_vehicle_land_detected);
 
-		// TODO: do something useful
+		/* Don't check a timeout for this topic, just accept whatever we get. */
+		if (_vehicle_land_detected.landed) {
+			_fsm.landed();
+
+		} else {
+			_fsm.in_air();
+		}
 	}
+}
+
+void MiniCommander::_set_home_position()
+{
+	/* If there is no global position yet, give up. */
+	if (_vehicle_global_position.timestamp == 0) {
+		return;
+	}
+
+	/* If there is no local position yet, give up as well. */
+	if (_vehicle_local_position.timestamp == 0 ||
+	    !_vehicle_local_position.xy_valid ||
+	    !_vehicle_local_position.z_valid) {
+		return;
+	}
+
+	/* We need to be landed, to set home. */
+	if (!_vehicle_land_detected.landed) {
+		return;
+	}
+
+	/* Ensure that the GPS accuracy is good enough for intializing home */
+	if (_vehicle_global_position.eph > _eph_threshold ||
+	    _vehicle_global_position.epv > _epv_threshold) {
+		return;
+	}
+
+	_home_position.timestamp = hrt_absolute_time();
+	_home_position.lat = _vehicle_global_position.lat;
+	_home_position.lon = _vehicle_global_position.lon;
+	_home_position.alt = _vehicle_global_position.alt;
+
+	_home_position.x = _vehicle_local_position.x;
+	_home_position.y = _vehicle_local_position.y;
+	_home_position.z = _vehicle_local_position.z;
+
+	// TODO: check if this var is correct. */
+	_home_position.yaw = _vehicle_local_position.yaw;
+
+	_home_position_set = true;
+	// TODO: add an armed state machine for this.
+	//_fsm.home_position_set();
+
+	_publish_home_position();
 }
 
 void MiniCommander::_publish_home_position()
 {
-	// TODO: actually do this
+	/* Check if it's ready to be published. */
+	if (!_home_position_set) {
+		return;
+	}
+
+	/* Announce new home position. */
+	if (_home_position_pub != nullptr) {
+		orb_publish(ORB_ID(home_position), _home_position_pub, &_home_position);
+
+	} else {
+		_home_position_pub = orb_advertise(ORB_ID(home_position), &_home_position);
+	}
 }
 
 void MiniCommander::_publish_vehicle_control_mode()
