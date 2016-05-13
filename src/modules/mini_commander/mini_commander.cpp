@@ -41,6 +41,7 @@
 
 #include <uORB/uORB.h>
 #include <uORB/topics/battery_status.h>
+#include <uORB/topics/actuator_armed.h>
 
 #include "mini_commander.h"
 
@@ -62,11 +63,9 @@ MiniCommander::MiniCommander() :
 	_vehicle_land_detected{},
 	_home_position{},
 	_home_position_set(false),
-	_actuator_armed{},
-	_failsafe_sm()
+	_failsafe_sm(),
+	_arming_sm()
 {
-	/* We really want to make sure we're disarmed on startup. */
-	_actuator_armed.armed = false;
 }
 
 MiniCommander::~MiniCommander()
@@ -76,20 +75,23 @@ void
 MiniCommander::task_main()
 {
 	_task_is_running = true;
+
 	while (!_task_should_exit) {
 
 		_check_topics();
 
 		/* Continuously try to set home position unless armed. */
-		if (!_actuator_armed.armed) {
+		if (!_arming_sm.is_armed()) {
 			_set_home_position();
 		}
 
 		_failsafe_sm.spin();
+		_arming_sm.spin();
 
 		_publish_topics();
 		usleep(_approx_interval_us);
 	}
+
 	_task_is_running = false;
 }
 
@@ -290,5 +292,20 @@ void MiniCommander::_publish_vehicle_status()
 
 void MiniCommander::_publish_actuator_armed()
 {
-	// TODO: actually do this
+	actuator_armed_s actuator_armed;
+	actuator_armed.timestamp = hrt_absolute_time();
+	actuator_armed.armed = _arming_sm.is_armed();
+	actuator_armed.prearmed = true;
+	actuator_armed.ready_to_arm = _arming_sm.is_ready_to_arm();
+	actuator_armed.lockdown = false;
+	actuator_armed.force_failsafe = false;
+	actuator_armed.in_esc_calibration_mode = false;
+
+	if (_actuator_armed_pub != nullptr) {
+
+		orb_publish(ORB_ID(actuator_armed), _actuator_armed_pub, &actuator_armed);
+
+	} else {
+		_actuator_armed_pub = orb_advertise(ORB_ID(actuator_armed), &actuator_armed);
+	}
 }

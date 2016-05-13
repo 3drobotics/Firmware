@@ -40,6 +40,7 @@ px4_add_module(
 		mini_commander_main.cpp
 		mini_commander.cpp
 		failsafe_state_machine.cpp
+		arming_state_machine.cpp
 	DEPENDS
 		platforms__common
 	)

@@ -48,7 +48,8 @@
  */
 extern "C" __EXPORT int mini_commander_main(int argc, char *argv[]);
 
-namespace mini_commander {
+namespace mini_commander
+{
 
 /*
  * Print the correct usage.
@@ -104,16 +105,17 @@ int mini_commander_main(int argc, char *argv[])
 
 		/* start the task */
 		mini_commander::_task = px4_task_spawn_cmd("mini_commander",
-							   SCHED_DEFAULT,
-							   SCHED_PRIORITY_MAX - 5,
-							   1500,
-							   (px4_main_t)&mini_commander::task_main_trampoline,
-							   nullptr);
+					SCHED_DEFAULT,
+					SCHED_PRIORITY_MAX - 5,
+					1500,
+					(px4_main_t)&mini_commander::task_main_trampoline,
+					nullptr);
 
 		if (mini_commander::_task < 0) {
 			PX4_ERR("task start failed");
 			return -errno;
 		}
+
 		return 0;
 	}
 
@@ -126,6 +128,7 @@ int mini_commander_main(int argc, char *argv[])
 	if (!strcmp(argv[1], "stop")) {
 
 		unsigned i = 0;
+
 		if (mini_commander::_task != -1) {
 			do {
 				/* wait 20ms */
@@ -137,6 +140,7 @@ int mini_commander_main(int argc, char *argv[])
 					break;
 				}
 			} while (mini_commander::_instance->is_running());
+
 			mini_commander::_task = -1;
 
 			PX4_INFO("terminated.");
