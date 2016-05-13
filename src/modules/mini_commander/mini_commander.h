@@ -115,5 +115,5 @@ private:
 
 	actuator_armed_s _actuator_armed;
 
-	FailsafeStateMachine _fsm;
+	FailsafeStateMachine _failsafe_sm;
 };

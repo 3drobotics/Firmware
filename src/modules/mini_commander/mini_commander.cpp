@@ -63,7 +63,7 @@ MiniCommander::MiniCommander() :
 	_home_position{},
 	_home_position_set(false),
 	_actuator_armed{},
-	_fsm()
+	_failsafe_sm()
 {
 	/* We really want to make sure we're disarmed on startup. */
 	_actuator_armed.armed = false;
@@ -85,7 +85,7 @@ MiniCommander::task_main()
 			_set_home_position();
 		}
 
-		_fsm.spin();
+		_failsafe_sm.spin();
 
 		_publish_topics();
 		usleep(_approx_interval_us);
@@ -96,7 +96,7 @@ MiniCommander::task_main()
 void
 MiniCommander::print_status()
 {
-	PX4_INFO("current navigation state: %d", _fsm.get_nav_state());
+	PX4_INFO("current navigation state: %d", _failsafe_sm.get_nav_state());
 }
 
 void
@@ -156,10 +156,10 @@ MiniCommander::_check_offboard_control_mode()
 
 	if (_offboard_control_mode.timestamp != 0 &&
 	    hrt_elapsed_time(&_offboard_control_mode.timestamp) < _offboard_timeout) {
-		_fsm.offboard_ok();
+		_failsafe_sm.offboard_ok();
 
 	} else {
-		_fsm.offboard_lost();
+		_failsafe_sm.offboard_lost();
 	}
 }
 
@@ -210,10 +210,10 @@ MiniCommander::_check_vehicle_land_detected()
 
 		/* Don't check a timeout for this topic, just accept whatever we get. */
 		if (_vehicle_land_detected.landed) {
-			_fsm.landed();
+			_failsafe_sm.landed();
 
 		} else {
-			_fsm.in_air();
+			_failsafe_sm.in_air();
 		}
 	}
 }
@@ -257,7 +257,7 @@ void MiniCommander::_set_home_position()
 
 	_home_position_set = true;
 	// TODO: add an armed state machine for this.
-	//_fsm.home_position_set();
+	//_failsafe_sm.home_position_set();
 
 	_publish_home_position();
 }
