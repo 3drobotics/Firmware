@@ -64,6 +64,9 @@ public:
 	/* Print some info. */
 	void print_status();
 
+	/* Try to arm. */
+	void arm();
+
 	void task_main();
 private:
 	void _check_topics();

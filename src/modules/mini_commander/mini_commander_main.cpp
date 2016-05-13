@@ -70,7 +70,7 @@ void usage(const char *reason)
 		PX4_WARN("%s", reason);
 	}
 
-	PX4_INFO("usage: mini_commander {start|stop|status}");
+	PX4_INFO("usage: mini_commander {start|stop|status|arm}");
 }
 
 void task_main_trampoline()
@@ -156,6 +156,12 @@ int mini_commander_main(int argc, char *argv[])
 		mini_commander::_instance->print_status();
 		return 0;
 	}
+
+	if (!strcmp(argv[1], "arm")) {
+		mini_commander::_instance->arm();
+		return 0;
+	}
+
 
 	mini_commander::usage("unrecognized command");
 	return -1;

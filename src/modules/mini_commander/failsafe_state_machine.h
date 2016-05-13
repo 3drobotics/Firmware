@@ -123,6 +123,29 @@ public:
 		return state->get_nav_state();
 	}
 
+	const char *get_nav_state_str()
+	{
+		switch (state->get_nav_state()) {
+			case vehicle_status_s::NAVIGATION_STATE_MANUAL:
+				return "MANUAL";
+			case vehicle_status_s::NAVIGATION_STATE_OFFBOARD:
+				return "OFFBOARD";
+			case vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER:
+				return "AUTO_LOITER";
+			case vehicle_status_s::NAVIGATION_STATE_AUTO_RTL:
+				return "AUTO_RTL";
+			case vehicle_status_s::NAVIGATION_STATE_DESCEND:
+				return "AUTO_RTL";
+			default:
+				return "Unknown";
+		}
+	}
+
+	bool is_in_failsafe()
+	{
+		return state->is_in_failsafe();
+	}
+
 private:
 	static void unhandled_event()
 	{
@@ -134,6 +157,7 @@ private:
 		using GenericState::GenericState;
 
 		virtual uint8_t get_nav_state() = 0;
+		virtual bool is_in_failsafe() = 0;
 
 		virtual void offboard_ok() { unhandled_event(); }
 		virtual void offboard_lost() { unhandled_event(); }
@@ -165,6 +189,11 @@ private:
 			return vehicle_status_s::NAVIGATION_STATE_MANUAL;
 		}
 
+		bool is_in_failsafe()
+		{
+			return false;
+		}
+
 		void offboard_ok()
 		{
 			change<Offboard>();
@@ -179,6 +208,11 @@ private:
 		uint8_t get_nav_state()
 		{
 			return vehicle_status_s::NAVIGATION_STATE_OFFBOARD;
+		}
+
+		bool is_in_failsafe()
+		{
+			return false;
 		}
 
 		void offboard_lost()
@@ -203,6 +237,11 @@ private:
 		uint8_t get_nav_state()
 		{
 			return failsafe_state->get_nav_state();
+		}
+
+		bool is_in_failsafe()
+		{
+			return true;
 		}
 
 		void entry()
