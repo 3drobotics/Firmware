@@ -125,7 +125,6 @@ public:
 private:
 	static void unhandled_event()
 	{
-		PX4_INFO("unhandled event");
 	}
 
 	class State : public fsm::GenericState<MiniCommanderFsm, State>
@@ -165,16 +164,6 @@ private:
 			return vehicle_status_s::NAVIGATION_STATE_MANUAL;
 		}
 
-		void entry()
-		{
-			PX4_INFO("Not doing anything.");
-		}
-
-		void exit()
-		{
-			PX4_INFO("Oh something is happening.");
-		}
-
 		void offboard_ok()
 		{
 			change<Offboard>();
@@ -189,16 +178,6 @@ private:
 		uint8_t get_nav_state()
 		{
 			return vehicle_status_s::NAVIGATION_STATE_OFFBOARD;
-		}
-
-		void entry()
-		{
-			PX4_INFO("Controlled offboard.");
-		}
-
-		void exit()
-		{
-			PX4_INFO("No more offboard.");
 		}
 
 		void offboard_lost()
@@ -227,8 +206,6 @@ private:
 
 		void entry()
 		{
-			PX4_INFO("In failsafe!");
-
 			/* When entering failsafe, look at GPS ok flag to decide
 			 * where to go. */
 			if (_machine._is_gps_ok) {
@@ -239,11 +216,6 @@ private:
 				/* Without GPS, we have to descend. */
 				FailsafeState::init<FailsafeDescend>(_machine, failsafe_state);
 			}
-		}
-
-		void exit()
-		{
-			PX4_INFO("Out of failsafe.");
 		}
 
 		void spin()
@@ -292,7 +264,6 @@ private:
 
 		void exit()
 		{
-			PX4_INFO("Done waiting.");
 			_time_wait_started_us = 0;
 		}
 
@@ -323,15 +294,6 @@ private:
 			return vehicle_status_s::NAVIGATION_STATE_AUTO_RTL;
 		}
 
-		void entry()
-		{
-			PX4_INFO("Return to land!");
-		}
-		void exit()
-		{
-			PX4_INFO("Aborting return to land.");
-		}
-
 		void gps_lost()
 		{
 			change<FailsafeDescend>();
@@ -346,15 +308,6 @@ private:
 		uint8_t get_nav_state()
 		{
 			return vehicle_status_s::NAVIGATION_STATE_DESCEND;
-		}
-
-		void entry()
-		{
-			PX4_INFO("Just go down.");
-		}
-		void exit()
-		{
-			PX4_INFO("No more going down?");
 		}
 
 		void gps_ok()
