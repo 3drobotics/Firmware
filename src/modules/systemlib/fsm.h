@@ -45,7 +45,8 @@
 
 #include <memory>
 
-namespace fsm {
+namespace fsm
+{
 
 template <class State>
 using StateRef = std::unique_ptr<State>;
