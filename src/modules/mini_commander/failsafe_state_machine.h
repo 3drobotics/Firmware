@@ -32,9 +32,10 @@
  ****************************************************************************/
 
 /**
- * @file mini_commander_fsm.h
+ * @file failsafe_state_machine.h
  *
- * Hierarchical state machine for the mini commander.
+ * Hierarchical state machine for the mini commander
+ * handling failsafe when offboard control is lost.
  *
  * @author Julian Oes <julian@oes.ch>
  */
@@ -59,12 +60,12 @@ extern uint64_t hrt_absolute_time_mock();
 #endif
 
 
-class MiniCommanderFsm
+class FailsafeStateMachine
 {
 public:
-	MiniCommanderFsm();
+	FailsafeStateMachine();
 
-	~MiniCommanderFsm();
+	~FailsafeStateMachine();
 
 public:
 	void offboard_ok()
@@ -127,7 +128,7 @@ private:
 	{
 	}
 
-	class State : public fsm::GenericState<MiniCommanderFsm, State>
+	class State : public fsm::GenericState<FailsafeStateMachine, State>
 	{
 	public:
 		using GenericState::GenericState;
@@ -143,7 +144,7 @@ private:
 	};
 	fsm::StateRef<State> state;
 
-	class FailsafeState : public fsm::GenericState<MiniCommanderFsm, FailsafeState>
+	class FailsafeState : public fsm::GenericState<FailsafeStateMachine, FailsafeState>
 	{
 	public:
 		using GenericState::GenericState;
