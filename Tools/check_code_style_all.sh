@@ -34,6 +34,7 @@ find \
     src/modules/segway \
     src/modules/sensors \
     src/modules/simulator \
+    src/modules/mini_commander \
     src/modules/systemlib \
     src/modules/unit_test \
     src/modules/uORB \

@@ -150,6 +150,7 @@ MavlinkReceiver::MavlinkReceiver(Mavlink *parent) :
 
 MavlinkReceiver::~MavlinkReceiver()
 {
+	orb_unsubscribe(_control_mode_sub);
 }
 
 void
@@ -250,8 +251,8 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 		handle_message_adsb_vehicle(msg);
 		break;
 
-	case MAVLINK_MSG_ID_GPS_INJECT_DATA:
-		handle_message_gps_inject_data(msg);
+	case MAVLINK_MSG_ID_GPS_RTCM_DATA:
+		handle_message_gps_rtcm_data(msg);
 		break;
 
 	default:
@@ -966,6 +967,10 @@ MavlinkReceiver::handle_message_vision_position_estimate(mavlink_message_t *msg)
 	vision_position.q[1] = q(1);
 	vision_position.q[2] = q(2);
 	vision_position.q[3] = q(3);
+
+	// TODO fix this
+	vision_position.pos_err = 0.0f;
+	vision_position.ang_err = 0.0f;
 
 	if (_vision_position_pub == nullptr) {
 		_vision_position_pub = orb_advertise(ORB_ID(vision_position_estimate), &vision_position);
@@ -1771,16 +1776,17 @@ void MavlinkReceiver::handle_message_adsb_vehicle(mavlink_message_t *msg)
 	}
 }
 
-void MavlinkReceiver::handle_message_gps_inject_data(mavlink_message_t *msg)
+void MavlinkReceiver::handle_message_gps_rtcm_data(mavlink_message_t *msg)
 {
-	mavlink_gps_inject_data_t gps_inject_data_msg;
+	mavlink_gps_rtcm_data_t gps_rtcm_data_msg;
 	gps_inject_data_s gps_inject_data_topic;
 
-	mavlink_msg_gps_inject_data_decode(msg, &gps_inject_data_msg);
+	mavlink_msg_gps_rtcm_data_decode(msg, &gps_rtcm_data_msg);
 
-	gps_inject_data_topic.len = gps_inject_data_msg.len;
-	memcpy(gps_inject_data_topic.data, gps_inject_data_msg.data,
-	       math::min((int)sizeof(gps_inject_data_topic.data), (int)sizeof(uint8_t) * gps_inject_data_msg.len));
+	gps_inject_data_topic.len = gps_rtcm_data_msg.len;
+	gps_inject_data_topic.flags = gps_rtcm_data_msg.flags;
+	memcpy(gps_inject_data_topic.data, gps_rtcm_data_msg.data,
+	       math::min((int)sizeof(gps_inject_data_topic.data), (int)sizeof(uint8_t) * gps_rtcm_data_msg.len));
 
 	orb_advert_t &pub = _gps_inject_data_pub[_gps_inject_data_next_idx];
 
@@ -2073,7 +2079,7 @@ MavlinkReceiver::receive_thread(void *arg)
 					srcaddr_last->sin_addr.s_addr = srcaddr.sin_addr.s_addr;
 					srcaddr_last->sin_port = srcaddr.sin_port;
 					_mavlink->set_client_source_initialized();
-					warnx("changing partner IP to: %s", inet_ntoa(srcaddr.sin_addr));
+					PX4_INFO("partner IP: %s", inet_ntoa(srcaddr.sin_addr));
 				}
 			}
 

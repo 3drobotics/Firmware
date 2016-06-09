@@ -109,6 +109,17 @@ PARAM_DEFINE_FLOAT(EKF2_RNG_DELAY, 5);
 PARAM_DEFINE_FLOAT(EKF2_ASP_DELAY, 200);
 
 /**
+ * Vision Position Estimator delay relative to IMU measurements
+ *
+ * @group EKF2
+ * @min 0
+ * @max 300
+ * @unit ms
+ * @decimal 1
+ */
+PARAM_DEFINE_FLOAT(EKF2_EV_DELAY, 175);
+
+/**
  * Integer bitmask controlling GPS checks.
  * 
  * Set bits to 1 to enable checks. Checks enabled by the following bit positions
@@ -471,10 +482,12 @@ PARAM_DEFINE_INT32(EKF2_REC_RPL, 0);
  * 0 : Set to true to use GPS data if available
  * 1 : Set to true to use optical flow data if available
  * 2 : Set to true to inhibit IMU bias estimation
- *
+ * 3 : Set to true to enable vision position fusion
+ * 4 : Set to true to enable vision yaw fusion
+ * *
  * @group EKF2
  * @min 0
- * @max 15
+ * @max 28
  */
 PARAM_DEFINE_INT32(EKF2_AID_MASK, 1);
 
@@ -485,8 +498,10 @@ PARAM_DEFINE_INT32(EKF2_AID_MASK, 1);
  *
  * @group EKF2
  * @value 0 Barometric pressure
- * @value 1 Reserved (GPS)
+ * @value 1 GPS
  * @value 2 Range sensor
+ * @value 3 Vision
+ *
  */
 PARAM_DEFINE_INT32(EKF2_HGT_MODE, 0);
 
@@ -520,6 +535,46 @@ PARAM_DEFINE_FLOAT(EKF2_RNG_GATE, 5.0f);
  */
 PARAM_DEFINE_FLOAT(EKF2_MIN_RNG, 0.1f);
 
+
+/**
+ * Measurement noise for vision position observations used when the vision system does not supply error estimates
+ *
+ * @group EKF2
+ * @min 0.01
+ * @unit m
+ * @decimal 2
+ */
+PARAM_DEFINE_FLOAT(EKF2_EVP_NOISE, 0.05f);
+
+/**
+ * Measurement noise for vision angle observations used when the vision system does not supply error estimates
+ *
+ * @group EKF2
+ * @min 0.01
+ * @unit rad
+ * @decimal 2
+ */
+PARAM_DEFINE_FLOAT(EKF2_EVA_NOISE, 0.05f);
+
+/**
+ * Gate size for vision estimate fusion
+ *
+ * @group EKF2
+ * @min 1.0
+ * @unit SD
+ * @decimal 1
+ */
+PARAM_DEFINE_FLOAT(EKF2_EV_GATE, 5.0f);
+
+/**
+ * Minimum valid range for the vision estimate
+ *
+ * @group EKF2
+ * @min 0.01
+ * @unit m
+ * @decimal 2
+ */
+PARAM_DEFINE_FLOAT(EKF2_MIN_EV, 0.01f);
 /**
  * Measurement noise for the optical flow sensor when it's reported quality metric is at the maximum
  *
@@ -701,7 +756,46 @@ PARAM_DEFINE_FLOAT(EKF2_OF_POS_Y, 0.0f);
 PARAM_DEFINE_FLOAT(EKF2_OF_POS_Z, 0.0f);
 
 /**
- * Time constant of the velocity output prediction and smoothing filter. Controls how tightly the velocity output tracks the EKF states. Set to a negative number to disable the EKF velocity state tracking. This will cause the output velocity to track the output position time derivative.
+* X position of VI sensor focal point in body frame
+ *
+ * @group EKF2
+ * @unit m
+ * @decimal 3
+ */
+PARAM_DEFINE_FLOAT(EKF2_EV_POS_X, 0.0f);
+
+/**
+ * Y position of VI sensor focal point in body frame
+ *
+ * @group EKF2
+ * @unit m
+ * @decimal 3
+ */
+PARAM_DEFINE_FLOAT(EKF2_EV_POS_Y, 0.0f);
+
+/**
+ * Z position of VI sensor focal point in body frame
+ *
+ * @group EKF2
+ * @unit m
+ * @decimal 3
+ */
+PARAM_DEFINE_FLOAT(EKF2_EV_POS_Z, 0.0f);
+
+ /**
+ * Airspeed fusion threshold. A value of zero will deactivate airspeed fusion. Any other positive
+ * value will determine the minimum airspeed which will still be fused.
+ *
+ * @group EKF2
+ * @min 0.0
+ * @unit m/s
+ * @decimal 1
+ */
+ PARAM_DEFINE_FLOAT(EKF2_ARSP_THR, 0.0f);
+
+/**
+
+ * Time constant of the velocity output prediction and smoothing filter
  *
  * @group EKF2
  * @max 1.0

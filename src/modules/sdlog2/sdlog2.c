@@ -1110,7 +1110,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 	}
 
 	/* initialize log buffer with specified size */
-	PX4_WARN("log buffer size: %i bytes", log_buffer_size);
+	PX4_DEBUG("log buffer size: %i bytes", log_buffer_size);
 
 	if (OK != logbuffer_init(&lb, log_buffer_size)) {
 		PX4_WARN("can't allocate log buffer, exiting");
@@ -1251,8 +1251,9 @@ int sdlog2_thread_main(int argc, char *argv[])
 			struct log_EST6_s log_INO3;
 			struct log_RPL3_s log_RPL3;
 			struct log_RPL4_s log_RPL4;
-			struct log_RPL6_s log_RPL6;
+			struct log_RPL5_s log_RPL5;
 			struct log_LAND_s log_LAND;
+			struct log_RPL6_s log_RPL6;
 			struct log_LOAD_s log_LOAD;
 		} body;
 	} log_msg = {
@@ -1516,6 +1517,7 @@ int sdlog2_thread_main(int argc, char *argv[])
 			log_msg.body.log_STAT.nav_state = buf_status.nav_state;
 			log_msg.body.log_STAT.arming_state = buf_status.arming_state;
 			log_msg.body.log_STAT.failsafe = (uint8_t) buf_status.failsafe;
+			log_msg.body.log_STAT.is_rot_wing = (uint8_t)buf_status.is_rotary_wing;
 			LOGBUFFER_WRITE_AND_COUNT(STAT);
 		}
 
@@ -1599,11 +1601,23 @@ int sdlog2_thread_main(int argc, char *argv[])
 					log_msg.msg_type = LOG_RPL6_MSG;
 					log_msg.body.log_RPL6.time_airs_usec = buf.replay.asp_timestamp;
 					log_msg.body.log_RPL6.indicated_airspeed_m_s = buf.replay.indicated_airspeed_m_s;
-					log_msg.body.log_RPL6.true_airspeed_m_s = buf.replay.true_airspeed_m_s;
-					log_msg.body.log_RPL6.true_airspeed_unfiltered_m_s = buf.replay.true_airspeed_unfiltered_m_s;
-					log_msg.body.log_RPL6.air_temperature_celsius = buf.replay.air_temperature_celsius;
-					log_msg.body.log_RPL6.confidence = buf.replay.confidence;
+					log_msg.body.log_RPL6.true_airspeed_m_s = buf.replay.true_airspeed_m_s;;
 					LOGBUFFER_WRITE_AND_COUNT(RPL6);
+				}
+
+				if (buf.replay.ev_timestamp > 0) {
+					log_msg.msg_type = LOG_RPL5_MSG;
+					log_msg.body.log_RPL5.time_ev_usec = buf.replay.ev_timestamp;
+					log_msg.body.log_RPL5.x = buf.replay.pos_ev[0];
+					log_msg.body.log_RPL5.y = buf.replay.pos_ev[1];
+					log_msg.body.log_RPL5.z = buf.replay.pos_ev[2];
+					log_msg.body.log_RPL5.q0 = buf.replay.quat_ev[0];
+					log_msg.body.log_RPL5.q1 = buf.replay.quat_ev[1];
+					log_msg.body.log_RPL5.q2 = buf.replay.quat_ev[2];
+					log_msg.body.log_RPL5.q3 = buf.replay.quat_ev[3];
+					log_msg.body.log_RPL5.pos_err = buf.replay.pos_err;
+					log_msg.body.log_RPL5.ang_err = buf.replay.ang_err;
+					LOGBUFFER_WRITE_AND_COUNT(RPL5);
 				}
 			}
 		}

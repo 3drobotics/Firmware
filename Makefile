@@ -155,9 +155,6 @@ px4-stm32f4discovery_default:
 px4fmu-v2_ekf2:
 	$(call cmake-build,nuttx_px4fmu-v2_ekf2)
 
-px4fmu-v2_lpe:
-	$(call cmake-build,nuttx_px4fmu-v2_lpe)
-
 mindpx-v2_default:
 	$(call cmake-build,nuttx_mindpx-v2_default)
 
@@ -165,9 +162,6 @@ posix_sitl_default:
 	$(call cmake-build,$@)
 
 posix_sitl_test:
-	$(call cmake-build,$@)
-
-posix_sitl_ekf2:
 	$(call cmake-build,$@)
 
 posix_sitl_replay:
@@ -209,6 +203,9 @@ posix_rpi2_default:
 	$(call cmake-build,$@)
 
 posix_rpi2_release:
+	$(call cmake-build,$@)
+
+posix_bebop_default:
 	$(call cmake-build,$@)
 
 posix: posix_sitl_default
@@ -254,7 +251,6 @@ checks_tests: \
 	check_px4fmu-v2_test
 
 checks_alts: \
-	check_px4fmu-v2_lpe \
 	check_px4fmu-v2_ekf2 \
 
 checks_uavcan: \
@@ -308,18 +304,18 @@ clean:
 	@(cd NuttX/nuttx && make clean)
 
 submodulesclean:
-	@git submodule sync
+	@git submodule sync --recursive
 	@git submodule deinit -f .
 	@git submodule update --init --recursive --force
 
 distclean: submodulesclean
-	@git clean -ff -x -d
+	@git clean -ff -x -d -e ".project" -e ".cproject"
 
 # targets handled by cmake
 cmake_targets = test upload package package_source debug debug_tui debug_ddd debug_io debug_io_tui debug_io_ddd check_weak \
 	run_cmake_config config gazebo gazebo_gdb gazebo_lldb jmavsim replay \
 	jmavsim_gdb jmavsim_lldb gazebo_gdb_iris gazebo_lldb_tailsitter gazebo_iris gazebo_iris_opt_flow gazebo_tailsitter \
-	gazebo_gdb_standard_vtol gazebo_lldb_standard_vtol gazebo_standard_vtol gazebo_plane
+	gazebo_gdb_standard_vtol gazebo_lldb_standard_vtol gazebo_standard_vtol gazebo_plane gazebo_solo
 $(foreach targ,$(cmake_targets),$(eval $(call cmake-targ,$(targ))))
 
 .PHONY: clean
