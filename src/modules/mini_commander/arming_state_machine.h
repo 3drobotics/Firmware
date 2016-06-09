@@ -66,25 +66,27 @@ public:
 	~ArmingStateMachine();
 
 public:
-	void landed()
+	struct InputFields {
+		bool landed;
+		bool home_position_set;
+	};
+
+	/*
+	 * Provide inputs to the state machine.
+	 */
+	void input(const InputFields &fields)
 	{
-		state->landed();
+		state->input(fields);
 	}
 
-	void in_air()
+	/*
+	 * One time event to try to arm.
+	 * */
+	void request_arm()
 	{
-		state->in_air();
+		state->request_arm();
 	}
 
-	void home_position_set()
-	{
-		state->home_position_set();
-	}
-
-	void arming_requested()
-	{
-		state->arming_requested();
-	}
 
 	/*
 	 * Check for timeouts happening inside the state machine.
@@ -107,7 +109,7 @@ public:
 	/*
 	 * Getter about the "ready to arm" state.
 	 *
-	 * return true if ready to armed
+	 * return true if ready to be armed
 	 */
 	bool is_ready_to_arm()
 	{
@@ -128,10 +130,8 @@ private:
 		virtual bool is_armed() = 0;
 		virtual bool is_ready_to_arm() = 0;
 
-		virtual void landed() { unhandled_event(); }
-		virtual void in_air() { unhandled_event(); }
-		virtual void home_position_set() { unhandled_event(); }
-		virtual void arming_requested() { unhandled_event(); }
+		virtual void input(const InputFields &fields) = 0;
+		virtual void request_arm() { unhandled_event(); }
 	};
 	fsm::StateRef<State> state;
 
@@ -140,9 +140,12 @@ private:
 	public:
 		using State::State;
 
-		void landed()
+		void input(const InputFields &fields)
 		{
-			change<DisarmedNotReady>();
+			if (fields.landed) {
+				/* Once landed, we disarm immediately. */
+				change<DisarmedNotReady>();
+			}
 		}
 
 		bool is_armed()
@@ -152,7 +155,7 @@ private:
 
 		bool is_ready_to_arm()
 		{
-			return true;
+			return false;
 		}
 	};
 
@@ -161,18 +164,29 @@ private:
 	public:
 		using State::State;
 
+		void input(const InputFields &fields)
+		{
+			if (!fields.landed) {
+				/* Once in-air, go to in-air starte. */
+				change<ArmedInAir>();
+			}
+		}
+
 		void entry()
 		{
+			/* Start the timer. */
 			_time_on_ground_started_us = HRT_ABSOLUTE_TIME();
 		}
 
 		void exit()
 		{
+			/* Reset the timer. */
 			_time_on_ground_started_us = 0;
 		}
 
 		void spin()
 		{
+			/* After a while not taking off, go back to disarmed. */
 			if ((HRT_ABSOLUTE_TIME() - _time_on_ground_started_us) > _timeout) {
 				change<DisarmedNotReady>();
 			}
@@ -185,12 +199,7 @@ private:
 
 		bool is_ready_to_arm()
 		{
-			return true;
-		}
-
-		void in_air()
-		{
-			change<ArmedInAir>();
+			return false;
 		}
 
 	private:
@@ -203,6 +212,14 @@ private:
 	public:
 		using State::State;
 
+		void input(const InputFields &fields)
+		{
+			if (fields.home_position_set) {
+				/* If we have a home set, we are ready be armed. */
+				change<DisarmedReady>();
+			}
+		}
+
 		bool is_armed()
 		{
 			return false;
@@ -212,17 +229,16 @@ private:
 		{
 			return false;
 		}
-
-		void home_position_set()
-		{
-			change<DisarmedReady>();
-		}
 	};
 
 	class DisarmedReady : public State
 	{
 	public:
 		using State::State;
+
+		void input(const InputFields &fields)
+		{
+		}
 
 		bool is_armed()
 		{
@@ -234,8 +250,9 @@ private:
 			return true;
 		}
 
-		void arming_requested()
+		void request_arm()
 		{
+			/* If arming is requested, we are ready. */
 			change<ArmedOnGround>();
 		}
 	};

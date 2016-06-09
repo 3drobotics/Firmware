@@ -67,47 +67,18 @@ public:
 
 	~FailsafeStateMachine();
 
-public:
-	void offboard_ok()
+	struct InputFields {
+		bool landed;
+		bool offboard_ok;
+		bool gps_ok;
+	};
+
+	/*
+	 * Provide inputs to the state machine.
+	 */
+	void input(const InputFields &fields)
 	{
-		state->offboard_ok();
-	}
-
-	void offboard_lost()
-	{
-		state->offboard_lost();
-	}
-
-	void gps_ok()
-	{
-		/* Update internal state. */
-		_is_gps_ok = true;
-
-		state->gps_ok();
-	}
-
-	void gps_lost()
-	{
-		/* Update internal state. */
-		_is_gps_ok = false;
-
-		state->gps_lost();
-	}
-
-	void landed()
-	{
-		/* Update internal state. */
-		_is_landed = true;
-
-		state->landed();
-	}
-
-	void in_air()
-	{
-		/* Update internal state. */
-		_is_landed = false;
-
-		state->in_air();
+		state->input(fields);
 	}
 
 	/*
@@ -118,11 +89,17 @@ public:
 		state->spin();
 	}
 
+	/*
+	 * Translate the internal state to a NAVIGATION_STATE.
+	 */
 	uint8_t get_nav_state()
 	{
 		return state->get_nav_state();
 	}
 
+	/*
+	 * Get the string to a navigation state.
+	 */
 	const char *get_nav_state_str()
 	{
 		switch (state->get_nav_state()) {
@@ -164,25 +141,9 @@ private:
 		virtual uint8_t get_nav_state() = 0;
 		virtual bool is_in_failsafe() = 0;
 
-		virtual void offboard_ok() { unhandled_event(); }
-		virtual void offboard_lost() { unhandled_event(); }
-		virtual void gps_ok() { unhandled_event(); }
-		virtual void gps_lost() { unhandled_event(); }
-		virtual void landed() { unhandled_event(); }
-		virtual void in_air() { unhandled_event(); }
+		virtual void input(const InputFields &fields) = 0;
 	};
 	fsm::StateRef<State> state;
-
-	class FailsafeState : public fsm::GenericState<FailsafeStateMachine, FailsafeState>
-	{
-	public:
-		using GenericState::GenericState;
-
-		virtual uint8_t get_nav_state() = 0;
-
-		virtual void gps_ok() { unhandled_event(); }
-		virtual void gps_lost() { unhandled_event(); }
-	};
 
 	class Disabled : public State
 	{
@@ -199,9 +160,14 @@ private:
 			return false;
 		}
 
-		void offboard_ok()
+		void input(const InputFields &fields)
 		{
-			change<Offboard>();
+			if (fields.offboard_ok) {
+
+				/* As soon as offboard commands are appearing it's
+				 * fine to switch to Offboard. */
+				change<Offboard>();
+			}
 		}
 	};
 
@@ -220,28 +186,35 @@ private:
 			return false;
 		}
 
-		void offboard_lost()
+		void input(const InputFields &fields)
 		{
-			if (_machine._is_landed) {
+			if (!fields.offboard_ok && fields.landed) {
+
 				/* If we are not in-air, there is no point going into
 				 * failsafe, just go straight to disabled. */
-
 				change<Disabled>();
 
-			} else {
-				change<Failsafe>();
+			} else if (!fields.offboard_ok && !fields.landed) {
+
+				/* If we are in-air and lose offboard, we need to enter
+				 * failsafe and do something. */
+				if (fields.gps_ok) {
+					change<Wait>();
+				} else {
+					change<Descend>();
+				}
 			}
 		}
 	};
 
-	class Failsafe : public State
+	class Wait : public State
 	{
 	public:
 		using State::State;
 
 		uint8_t get_nav_state()
 		{
-			return failsafe_state->get_nav_state();
+			return vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER;
 		}
 
 		bool is_in_failsafe()
@@ -249,79 +222,42 @@ private:
 			return true;
 		}
 
-		void entry()
+		void input(const InputFields &fields)
 		{
-			/* When entering failsafe, look at GPS ok flag to decide
-			 * where to go. */
-			if (_machine._is_gps_ok) {
-				/* With GPS, we can just wait for a bit. */
-				FailsafeState::init<FailsafeWait>(_machine, failsafe_state);
+			if (fields.offboard_ok) {
+				/* Offboard has highest priority because it can take
+				 * appropriate action on GPS and landed flags. */
+				change<Offboard>();
 
-			} else {
-				/* Without GPS, we have to descend. */
-				FailsafeState::init<FailsafeDescend>(_machine, failsafe_state);
+			} else if (!fields.gps_ok) {
+				/* We can't wait without GPS, so we'll have to descend. */
+				change<Descend>();
+
+			} else if (fields.landed) {
+				/* This is unlikely but if it happens, let's trust the
+				 * land_detector. */
+				change<Disabled>();
 			}
 		}
 
-		void spin()
-		{
-			failsafe_state->spin();
-		}
-
-		void offboard_ok()
-		{
-			change<Offboard>();
-		}
-
-		void landed()
-		{
-			change<Disabled>();
-		}
-
-		void gps_ok()
-		{
-			failsafe_state->gps_ok();
-		}
-
-		void gps_lost()
-		{
-			failsafe_state->gps_lost();
-		}
-
-	private:
-		fsm::StateRef<FailsafeState> failsafe_state;
-	};
-
-	class FailsafeWait : public FailsafeState
-	{
-	public:
-		using FailsafeState::FailsafeState;
-
-		uint8_t get_nav_state()
-		{
-			return vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER;
-		}
-
 		void entry()
 		{
+			/* When entering Wait, let's start a timer. */
 			_time_wait_started_us = HRT_ABSOLUTE_TIME();
 		}
 
 		void exit()
 		{
+			/* Clean up timer. */
 			_time_wait_started_us = 0;
 		}
 
 		void spin()
 		{
+			/* If timer is done, proceed to RTL. */
 			if ((HRT_ABSOLUTE_TIME() - _time_wait_started_us) > _timeout) {
-				change<FailsafeRtl>();
+				change<Rtl>();
 			}
-		}
-
-		void gps_lost()
-		{
-			change<FailsafeDescend>();
 		}
 
 	private:
@@ -329,47 +265,69 @@ private:
 		uint64_t _time_wait_started_us = 0;
 	};
 
-	class FailsafeRtl : public FailsafeState
+	class Rtl : public State
 	{
 	public:
-		using FailsafeState::FailsafeState;
+		using State::State;
 
 		uint8_t get_nav_state()
 		{
 			return vehicle_status_s::NAVIGATION_STATE_AUTO_RTL;
 		}
 
-		void gps_lost()
+		bool is_in_failsafe()
 		{
-			change<FailsafeDescend>();
+			return true;
+		}
+
+		void input(const InputFields &fields)
+		{
+			if (fields.offboard_ok) {
+				/* Offboard has highest priority because it can take
+				 * appropriate action on GPS and landed flags. */
+				change<Offboard>();
+
+			} else if (!fields.gps_ok) {
+				/* Can't do RTL without GPS, so we need to just descend. */
+				change<Descend>();
+
+			} else if (fields.landed) {
+				/* Once RTL is done, go back to disabled. */
+				change<Disabled>();
+			}
 		}
 	};
 
-	class FailsafeDescend : public FailsafeState
+	class Descend : public State
 	{
 	public:
-		using FailsafeState::FailsafeState;
+		using State::State;
 
 		uint8_t get_nav_state()
 		{
 			return vehicle_status_s::NAVIGATION_STATE_DESCEND;
 		}
 
-		void gps_ok()
+		bool is_in_failsafe()
 		{
-			change<FailsafeWait>();
+			return true;
+		}
+
+		void input(const InputFields &fields)
+		{
+			if (fields.offboard_ok) {
+				/* Offboard has highest priority because it can take
+				 * appropriate action on GPS and landed flags. */
+				change<Offboard>();
+
+			} else if (fields.gps_ok) {
+				/* GPS is back, let's wait. */
+				change<Wait>();
+
+			} else if (fields.landed) {
+				/* We're done descending, go back to disabled. */
+				change<Disabled>();
+			}
 		}
 	};
-
-	/*
-	 * The state machine needs to keep track internally of the flags about
-	 * GPS and landed because it needs to evaluate forks when entering the
-	 * failsafe state from offboard.
-	 *
-	 * This is a hacky approach but it prevents the state diagram from
-	 * blowing up too much because we don't need hierarchical states for
-	 * all possible combinations.
-	 */
-	bool _is_landed;
-	bool _is_gps_ok;
 };

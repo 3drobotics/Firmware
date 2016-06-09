@@ -64,8 +64,17 @@ MiniCommander::MiniCommander() :
 	_home_position{},
 	_home_position_set(false),
 	_failsafe_sm(),
-	_arming_sm()
+	_failsafe_sm_inputs{},
+	_arming_sm(),
+	_arming_sm_inputs{}
 {
+	/* Set sane defaults for input fields. */
+	_failsafe_sm_inputs.landed = true;
+	_failsafe_sm_inputs.offboard_ok = false;
+	_failsafe_sm_inputs.gps_ok = false;
+
+	_arming_sm_inputs.landed = true;
+	_arming_sm_inputs.home_position_set = false;
 }
 
 MiniCommander::~MiniCommander()
@@ -83,9 +92,13 @@ MiniCommander::task_main()
 		/* Continuously try to set home position unless armed. */
 		if (!_arming_sm.is_armed()) {
 			_set_home_position();
+			_arming_sm_inputs.home_position_set = _home_position_set;
 		}
 
+		_failsafe_sm.input(_failsafe_sm_inputs);
 		_failsafe_sm.spin();
+
+		_arming_sm.input(_arming_sm_inputs);
 		_arming_sm.spin();
 
 		_publish_topics();
@@ -108,7 +121,7 @@ MiniCommander::print_status()
 void
 MiniCommander::arm()
 {
-	_arming_sm.arming_requested();
+	_arming_sm.request_arm();
 }
 
 void
@@ -168,10 +181,10 @@ MiniCommander::_check_offboard_control_mode()
 
 	if (_offboard_control_mode.timestamp != 0 &&
 	    hrt_elapsed_time(&_offboard_control_mode.timestamp) < _offboard_timeout_us) {
-		_failsafe_sm.offboard_ok();
+		_failsafe_sm_inputs.offboard_ok = true;
 
 	} else {
-		_failsafe_sm.offboard_lost();
+		_failsafe_sm_inputs.offboard_ok = false;
 	}
 }
 
@@ -193,10 +206,10 @@ MiniCommander::_check_vehicle_global_position()
 	/* TODO: improve these GPS ok/lost tests with estimator information. */
 	if (_vehicle_global_position.timestamp != 0 &&
 	    hrt_elapsed_time(&_vehicle_global_position.timestamp) < _vehicle_global_position_timeout_us) {
-		_failsafe_sm.gps_ok();
+		_failsafe_sm_inputs.gps_ok = true;
 
 	} else {
-		_failsafe_sm.gps_lost();
+		_failsafe_sm_inputs.gps_ok = false;
 	}
 }
 
@@ -231,14 +244,12 @@ MiniCommander::_check_vehicle_land_detected()
 
 		/* Don't check a timeout for this topic, just accept whatever we get. */
 		if (_vehicle_land_detected.landed) {
-			PX4_INFO("landed");
-			_failsafe_sm.landed();
-			_arming_sm.landed();
+			_failsafe_sm_inputs.landed = true;
+			_arming_sm.input(_arming_sm_inputs);
 
 		} else {
-			PX4_INFO("in air");
-			_failsafe_sm.in_air();
-			_arming_sm.in_air();
+			_failsafe_sm_inputs.landed = false;
+			_arming_sm.input(_arming_sm_inputs);
 		}
 	}
 }
@@ -284,8 +295,6 @@ void MiniCommander::_set_home_position()
 		PX4_INFO("Home position set");
 		_home_position_set = true;
 	}
-
-	_arming_sm.home_position_set();
 
 	_publish_home_position();
 }

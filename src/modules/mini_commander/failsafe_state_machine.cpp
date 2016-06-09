@@ -39,9 +39,7 @@
 
 #include "failsafe_state_machine.h"
 
-FailsafeStateMachine::FailsafeStateMachine() :
-	_is_landed(true),
-	_is_gps_ok(false)
+FailsafeStateMachine::FailsafeStateMachine()
 {
 	State::init<Disabled>(*this, state);
 }
