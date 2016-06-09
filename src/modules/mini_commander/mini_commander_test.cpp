@@ -38,82 +38,104 @@ void spin_for(uint64_t time_us, uint64_t interval_us, StateMachine &sm)
  */
 TEST(MiniCommanderTest, FailsafeStateMachine)
 {
-	FailsafeStateMachine failsafe_sm;
+	FailsafeStateMachine sm;
+	FailsafeStateMachine::InputFields inputs;
+
+	inputs.landed = true;
+	inputs.offboard_ok = false;
+	inputs.gps_ok = false;
+
 	/* We should start in MANUAL which corresponds to Disabled. */
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_MANUAL);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_MANUAL);
 
 	/* Once offboard is ok, we can go into offboard. */
-	failsafe_sm.offboard_ok();
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
+	inputs.offboard_ok = true;
+	sm.input(inputs);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
 
 	/* GPS lost in offboard shouldn't change anything because that's
 	 * supposed to be handled in the offboard controller. */
-	failsafe_sm.gps_lost();
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
+	inputs.gps_ok = false;
+	sm.input(inputs);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
 
 	/* We took off in offboard. */
-	failsafe_sm.in_air();
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
+	inputs.landed = false;
+	sm.input(inputs);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
 
 	/* However, once offboard is lost (and without GPS), we have to descend. */
-	failsafe_sm.offboard_lost();
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_DESCEND);
+	inputs.offboard_ok = false;
+	sm.input(inputs);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_DESCEND);
 
 	/* Offboard is good again, do whatever offboard wants. */
-	failsafe_sm.offboard_ok();
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
+	inputs.offboard_ok = true;
+	sm.input(inputs);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
 
 	/* Oh, offboard lost again, once again to descend. */
-	failsafe_sm.offboard_lost();
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_DESCEND);
+	inputs.offboard_ok = false;
+	sm.input(inputs);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_DESCEND);
 
 	/* Yes GPS is still lost, no change. */
-	failsafe_sm.gps_lost();
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_DESCEND);
+	inputs.gps_ok = false;
+	sm.input(inputs);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_DESCEND);
 
 	/* Ok offboard back once again. */
-	failsafe_sm.offboard_ok();
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
+	inputs.offboard_ok = true;
+	sm.input(inputs);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
 
 	/* Now GPS is recovered in offboard */
-	failsafe_sm.gps_ok();
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
+	inputs.gps_ok = true;
+	sm.input(inputs);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
 
 	/* Offboard lost should now wait, and not descend. */
-	failsafe_sm.offboard_lost();
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
+	inputs.offboard_ok = false;
+	sm.input(inputs);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
 
 	/* We lost GPS anyway, let's descend */
-	failsafe_sm.gps_lost();
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_DESCEND);
+	inputs.gps_ok = false;
+	sm.input(inputs);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_DESCEND);
 
 	/* GPS back, wait again. */
-	failsafe_sm.gps_ok();
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
+	inputs.gps_ok = true;
+	sm.input(inputs);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
 
 	/* Let's let the timer expire and go into RTL. */
-	spin_for(60000000, 10000, failsafe_sm);
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_RTL);
+	spin_for(60000000, 10000, sm);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_RTL);
 
 	/* GPS lost again, to descend. */
-	failsafe_sm.gps_lost();
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_DESCEND);
+	inputs.gps_ok = false;
+	sm.input(inputs);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_DESCEND);
 
 	/* Oh, GPS is back, let's wait once again. */
-	failsafe_sm.gps_ok();
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
+	inputs.gps_ok = true;
+	sm.input(inputs);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
 
 	/* Timeout to RTL again */
-	spin_for(60000000, 10000, failsafe_sm);
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_RTL);
+	spin_for(60000000, 10000, sm);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_RTL);
 
 	/* We land successfully, go back to Disabled. */
-	failsafe_sm.landed();
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_MANUAL);
+	inputs.landed = true;
+	sm.input(inputs);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_MANUAL);
 
 	/* In air doesn't confuse use, we're still disabled. */
-	failsafe_sm.in_air();
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_MANUAL);
+	inputs.landed = false;
+	sm.input(inputs);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_MANUAL);
 }
 
 /*
@@ -121,50 +143,61 @@ TEST(MiniCommanderTest, FailsafeStateMachine)
  */
 TEST(MiniCommanderTest, FailsafeStateMachineWaitTimeout)
 {
-	FailsafeStateMachine failsafe_sm;
+	FailsafeStateMachine sm;
+	FailsafeStateMachine::InputFields inputs;
+
+	inputs.landed = true;
+	inputs.offboard_ok = false;
+	inputs.gps_ok = false;
 
 	/* Start in disabled, as usual. */
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_MANUAL);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_MANUAL);
 
 	/* We happen to have GPS today. */
-	failsafe_sm.gps_ok();
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_MANUAL);
+	inputs.gps_ok = true;
+	sm.input(inputs);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_MANUAL);
 
 	/* Go to offboard, all normal. */
-	failsafe_sm.offboard_ok();
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
+	inputs.offboard_ok = true;
+	sm.input(inputs);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
 
 	/* Taking off. */
-	failsafe_sm.in_air();
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
+	inputs.landed = false;
+	sm.input(inputs);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
 
 	/* Once offboard is lost, we should end up in loiter. */
-	failsafe_sm.offboard_lost();
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
+	inputs.offboard_ok = false;
+	sm.input(inputs);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
 
 	/* After 2 seconds of spinning at 10 Hz, we should still be in loiter. */
-	spin_for(2000000, 100000, failsafe_sm);
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
+	spin_for(2000000, 100000, sm);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
 
 	/* However, after 6s ( > 5s), we should end up in RTL. */
-	spin_for(4000000, 100000, failsafe_sm);
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_RTL);
+	spin_for(4000000, 100000, sm);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_RTL);
 
 	/* Try if we can go back to offboard. */
-	failsafe_sm.offboard_ok();
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
+	inputs.offboard_ok = true;
+	sm.input(inputs);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_OFFBOARD);
 
 	/* Try one more time to check if the timer resets. */
-	failsafe_sm.offboard_lost();
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
+	inputs.offboard_ok = false;
+	sm.input(inputs);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
 
 	/* After 2 seconds of spinning at 10 Hz, we should still be in loiter. */
-	spin_for(2000000, 100000, failsafe_sm);
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
+	spin_for(2000000, 100000, sm);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER);
 
 	/* However, after 6s ( > 5s), we should end up in RTL. */
-	spin_for(4000000, 100000, failsafe_sm);
-	ASSERT(failsafe_sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_RTL);
+	spin_for(4000000, 100000, sm);
+	ASSERT(sm.get_nav_state() == vehicle_status_s::NAVIGATION_STATE_AUTO_RTL);
 }
 
 /*
@@ -172,64 +205,76 @@ TEST(MiniCommanderTest, FailsafeStateMachineWaitTimeout)
  */
 TEST(MiniCommanderTest, ArmingStateMachine)
 {
-	ArmingStateMachine arming_sm;
+	ArmingStateMachine sm;
+	ArmingStateMachine::InputFields inputs;
+
+	inputs.landed = false;
+	inputs.home_position_set = false;
 
 	/* We must be disarmed on startup! */
-	ASSERT_FALSE(arming_sm.is_armed());
+	ASSERT_FALSE(sm.is_armed());
 
 	/* Don't allow arming without home position. */
-	arming_sm.arming_requested();
-	ASSERT_FALSE(arming_sm.is_armed());
+	sm.request_arm();
+	ASSERT_FALSE(sm.is_armed());
 
 	/* Now a home position is supplied. */
-	arming_sm.home_position_set();
-	ASSERT_FALSE(arming_sm.is_armed());
+	inputs.home_position_set = true;
+	sm.input(inputs);
+	ASSERT_FALSE(sm.is_armed());
 
 	/* Request again. */
-	arming_sm.arming_requested();
-	ASSERT_TRUE(arming_sm.is_armed());
+	sm.request_arm();
+	ASSERT_TRUE(sm.is_armed());
 
 	/* Being landed after arming doesn't mean we disarm straightaway. */
-	arming_sm.landed();
-	ASSERT_TRUE(arming_sm.is_armed());
+	inputs.landed = true;
+	sm.input(inputs);
+	ASSERT_TRUE(sm.is_armed());
 
 	/* After a timeout of 1s we're still armed. */
-	spin_for(1000000, 100000, arming_sm);
-	ASSERT_TRUE(arming_sm.is_armed());
+	spin_for(1000000, 100000, sm);
+	ASSERT_TRUE(sm.is_armed());
 
 	/* But after 6s, we're disarmed again. */
-	spin_for(5000000, 100000, arming_sm);
-	ASSERT_FALSE(arming_sm.is_armed());
+	spin_for(5000000, 100000, sm);
+	ASSERT_FALSE(sm.is_armed());
 
 	/* Let's try to arm again, again we need home first. */
-	arming_sm.arming_requested();
-	ASSERT_FALSE(arming_sm.is_armed());
+	sm.request_arm();
+	ASSERT_FALSE(sm.is_armed());
 
 	/* Ok, give it home. */
-	arming_sm.home_position_set();
-	ASSERT_FALSE(arming_sm.is_armed());
-	arming_sm.arming_requested();
-	ASSERT_TRUE(arming_sm.is_armed());
+	inputs.home_position_set = true;
+	sm.input(inputs);
+	ASSERT_FALSE(sm.is_armed());
+	sm.request_arm();
+	ASSERT_TRUE(sm.is_armed());
 
 	/* Now let's take off. */
-	arming_sm.in_air();
-	ASSERT_TRUE(arming_sm.is_armed());
+	inputs.landed = false;
+	sm.input(inputs);
+	ASSERT_TRUE(sm.is_armed());
 
 	/* Throw random request at it. */
-	arming_sm.arming_requested();
-	ASSERT_TRUE(arming_sm.is_armed());
+	sm.request_arm();
+	ASSERT_TRUE(sm.is_armed());
 
-	arming_sm.home_position_set();
-	ASSERT_TRUE(arming_sm.is_armed());
+	inputs.home_position_set = true;
+	sm.input(inputs);
+	ASSERT_TRUE(sm.is_armed());
 
-	arming_sm.in_air();
-	ASSERT_TRUE(arming_sm.is_armed());
+	inputs.landed = false;
+	sm.input(inputs);
+	ASSERT_TRUE(sm.is_armed());
 
 	/* Land again, we should disarm. */
-	arming_sm.landed();
-	ASSERT_FALSE(arming_sm.is_armed());
+	inputs.landed = true;
+	sm.input(inputs);
+	ASSERT_FALSE(sm.is_armed());
 
 	/* In air once again doesn't bother us. */
-	arming_sm.in_air();
-	ASSERT_FALSE(arming_sm.is_armed());
+	inputs.landed = false;
+	sm.input(inputs);
+	ASSERT_FALSE(sm.is_armed());
 }

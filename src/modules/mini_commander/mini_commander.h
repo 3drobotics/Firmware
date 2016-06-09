@@ -121,5 +121,8 @@ private:
 	actuator_armed_s _actuator_armed;
 
 	FailsafeStateMachine _failsafe_sm;
+	FailsafeStateMachine::InputFields _failsafe_sm_inputs;
+
 	ArmingStateMachine _arming_sm;
+	ArmingStateMachine::InputFields _arming_sm_inputs;
 };
