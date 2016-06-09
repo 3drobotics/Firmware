@@ -200,6 +200,7 @@ private:
 				 * failsafe and do something. */
 				if (fields.gps_ok) {
 					change<Wait>();
+
 				} else {
 					change<Descend>();
 				}
