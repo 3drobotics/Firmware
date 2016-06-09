@@ -116,7 +116,7 @@ public:
 			return "AUTO_RTL";
 
 		case vehicle_status_s::NAVIGATION_STATE_DESCEND:
-			return "AUTO_RTL";
+			return "DESCEND";
 
 		default:
 			return "Unknown";
