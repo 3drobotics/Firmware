@@ -95,11 +95,11 @@ MiniCommander::task_main()
 			_arming_sm_inputs.home_position_set = _home_position_set;
 		}
 
-		// Apply inputs to state machines, no matter if they changed or not.
+		/* Apply inputs to state machines, no matter if they changed or not. */
 		_failsafe_sm.input(_failsafe_sm_inputs);
 		_arming_sm.input(_arming_sm_inputs);
 
-		// Let the state machines spin to trigger any timeouts.
+		/* Let the state machines spin to trigger any timeouts. */
 		_failsafe_sm.spin();
 		_arming_sm.spin();
 
