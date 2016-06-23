@@ -41,6 +41,7 @@ set(config_module_list
 	modules/fw_att_control
 	modules/fw_pos_control_l1
 	modules/land_detector
+	modules/mini_commander
 	modules/load_mon
 	modules/logger
 	modules/mavlink
