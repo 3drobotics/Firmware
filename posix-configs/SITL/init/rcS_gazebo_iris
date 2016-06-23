@@ -55,7 +55,7 @@ gpssim start
 pwm_out_sim mode_pwm
 sleep 1
 sensors start
-commander start
+mini_commander start
 land_detector start multicopter
 navigator start
 ekf2 start
