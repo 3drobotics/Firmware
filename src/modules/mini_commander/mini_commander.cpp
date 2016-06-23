@@ -95,10 +95,12 @@ MiniCommander::task_main()
 			_arming_sm_inputs.home_position_set = _home_position_set;
 		}
 
+		// Apply inputs to state machines, no matter if they changed or not.
 		_failsafe_sm.input(_failsafe_sm_inputs);
-		_failsafe_sm.spin();
-
 		_arming_sm.input(_arming_sm_inputs);
+
+		// Let the state machines spin to trigger any timeouts.
+		_failsafe_sm.spin();
 		_arming_sm.spin();
 
 		_publish_topics();
@@ -244,12 +246,12 @@ MiniCommander::_check_vehicle_land_detected()
 
 		/* Don't check a timeout for this topic, just accept whatever we get. */
 		if (_vehicle_land_detected.landed) {
+			_arming_sm_inputs.landed = true;
 			_failsafe_sm_inputs.landed = true;
-			_arming_sm.input(_arming_sm_inputs);
 
 		} else {
+			_arming_sm_inputs.landed = false;
 			_failsafe_sm_inputs.landed = false;
-			_arming_sm.input(_arming_sm_inputs);
 		}
 	}
 }
